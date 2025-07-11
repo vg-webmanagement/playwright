@@ -1077,6 +1077,16 @@ app.get('/run-tests', async (req, res) => {
                     if (testStatus.isRunning) { // Check again in case it was marked complete elsewhere
                         testStatus.isRunning = false;
                         testStatus.completedTime = new Date().toISOString();
+                        
+                        // Set progress stage to completed and broadcast the update
+                        testProgress.stage = 'completed';
+                        // Ensure completed count matches total if not already set
+                        if (testProgress.completed < testProgress.total && testProgress.total > 0) {
+                            testProgress.completed = testProgress.total;
+                        }
+                        broadcastProgress();
+                        logProgress();
+                        
                         console.log('✅ Test execution completed');
                     }
                 }, 2000); // Wait 2 seconds for report generation
@@ -1088,6 +1098,15 @@ app.get('/run-tests', async (req, res) => {
             // Mark test as completed (with error)
             testStatus.isRunning = false;
             testStatus.completedTime = new Date().toISOString();
+            
+            // Set progress stage to completed and broadcast the update
+            testProgress.stage = 'completed';
+            // Ensure completed count matches total if not already set
+            if (testProgress.completed < testProgress.total && testProgress.total > 0) {
+                testProgress.completed = testProgress.total;
+            }
+            broadcastProgress();
+            logProgress();
         });
         
     } catch (error) {
