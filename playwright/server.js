@@ -283,14 +283,18 @@ function broadcastProgress() {
 // Function to parse test progress from Playwright output
 function parseTestProgress(output) {
     const lines = output.split('\n');
+    let shouldBroadcast = false;
     
     lines.forEach(line => {
         // Match running test pattern: [chromium] › tests/pixel.test.mjs:79:5 › Test Name
         const runningMatch = line.match(/\[chromium\]\s*›\s*tests\/([^:]+).*?›\s*(.+?)(?:\s*───|$)/);
         if (runningMatch) {
-            testProgress.currentFile = runningMatch[1];
-            testProgress.currentTest = runningMatch[2].trim();
-            broadcastProgress();
+            const newTest = runningMatch[2].trim();
+            if (testProgress.currentTest !== newTest) {
+                testProgress.currentFile = runningMatch[1];
+                testProgress.currentTest = newTest;
+                shouldBroadcast = true;
+            }
         }
         
         // Match completion summary: "4 failed" or "6 passed"
@@ -299,23 +303,32 @@ function parseTestProgress(output) {
             const count = parseInt(summaryMatch[1]);
             const status = summaryMatch[2];
             
-            if (status === 'passed') {
+            if (status === 'passed' && testProgress.passed !== count) {
                 testProgress.passed = count;
-            } else if (status === 'failed') {
+                shouldBroadcast = true;
+            } else if (status === 'failed' && testProgress.failed !== count) {
                 testProgress.failed = count;
+                shouldBroadcast = true;
             }
             
             testProgress.completed = testProgress.passed + testProgress.failed;
-            broadcastProgress();
         }
         
         // Extract total test count when available
         const totalMatch = line.match(/Running\s+(\d+)\s+tests?/);
         if (totalMatch) {
-            testProgress.total = parseInt(totalMatch[1]);
-            broadcastProgress();
+            const newTotal = parseInt(totalMatch[1]);
+            if (testProgress.total !== newTotal) {
+                testProgress.total = newTotal;
+                shouldBroadcast = true;
+            }
         }
     });
+    
+    // Only broadcast once per output chunk if something actually changed
+    if (shouldBroadcast) {
+        broadcastProgress();
+    }
 }
 
 // Route 5.2: Reset test status (for debugging)
