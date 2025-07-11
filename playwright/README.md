@@ -125,9 +125,8 @@ playwright/
 2. **Port already in use**: Stop any existing processes on port 3000
 3. **Crawler fails**: Check that the specified domain and environment are accessible
 4. **Tests fail**: Verify that all environment variables are correctly set
-5. **Test completion not detected**: Check server console logs for debugging info
-6. **Tests stuck in "running" state**: Use `POST /reset-test-status` to reset status
-7. **Report not showing**: Verify that `playwright-report/index.html` exists in the project directory
+5. **Tests stuck in "running" state**: Use `POST /reset-test-status` to reset status
+6. **Report not showing**: Verify that `playwright-report/index.html` exists in the project directory
 
 ## Development
 
