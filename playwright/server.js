@@ -237,6 +237,7 @@ app.post('/save-urls', (req, res) => {
 
 // Route 5: Test status endpoint
 app.get('/test-status', (req, res) => {
+    console.log('Test status requested:', testStatus);
     res.json(testStatus);
 });
 
@@ -265,6 +266,7 @@ app.get('/run-tests', async (req, res) => {
         testStatus.isRunning = true;
         testStatus.startTime = new Date().toISOString();
         testStatus.completedTime = null;
+        console.log('Test status updated to running at:', testStatus.startTime);
         
         // Clean up old report directory to ensure fresh results
         const reportDir = path.join(__dirname, 'playwright-report');
@@ -274,6 +276,17 @@ app.get('/run-tests', async (req, res) => {
                 console.log('Cleaned up old test report directory');
             } catch (error) {
                 console.warn('Could not clean up old report directory:', error.message);
+            }
+        }
+        
+        // Also clean up test-results if it exists (legacy)
+        const testResultsDir = path.join(__dirname, 'test-results');
+        if (fs.existsSync(testResultsDir)) {
+            try {
+                fs.rmSync(testResultsDir, { recursive: true, force: true });
+                console.log('Cleaned up old test-results directory');
+            } catch (error) {
+                console.warn('Could not clean up old test-results directory:', error.message);
             }
         }
         
@@ -391,11 +404,15 @@ app.get('/run-tests', async (req, res) => {
                         fetch('/test-status')
                             .then(response => response.json())
                             .then(status => {
+                                console.log('Test status received:', status);
                                 if (!status.isRunning && status.completedTime) {
+                                    console.log('Test is complete, checking for report...');
                                     // Test is complete, now check if report exists
                                     fetch('/playwright-report/index.html')
                                         .then(reportResponse => {
+                                            console.log('Report response status:', reportResponse.status);
                                             if (reportResponse.ok) {
+                                                console.log('Report is ready, showing completion message');
                                                 document.getElementById('status').className = 'status completed';
                                                 document.getElementById('status').innerHTML = '✅ <strong>Tests Completed Successfully!</strong><br>Results are ready to view.';
                                                 document.getElementById('spinner').style.display = 'none';
@@ -403,13 +420,17 @@ app.get('/run-tests', async (req, res) => {
                                                 testCompleted = true;
                                             } else {
                                                 // Test completed but report not ready yet
+                                                console.log('Test completed but report not ready yet');
                                                 document.getElementById('status').innerHTML = '⏳ <strong>Generating report...</strong><br>Please wait while the report is being generated.';
                                             }
                                         })
-                                        .catch(() => {
+                                        .catch(error => {
                                             // Report not ready yet
+                                            console.log('Error fetching report:', error);
                                             document.getElementById('status').innerHTML = '⏳ <strong>Generating report...</strong><br>Please wait while the report is being generated.';
                                         });
+                                } else {
+                                    console.log('Test still running or not completed yet');
                                 }
                             })
                             .catch(error => {
@@ -472,9 +493,32 @@ app.get('/run-tests', async (req, res) => {
         
         child.on('close', (code) => {
             console.log(`Test execution completed with exit code: ${code}`);
-            // Mark test as completed
-            testStatus.isRunning = false;
-            testStatus.completedTime = new Date().toISOString();
+            
+            // Wait a moment for report files to be written, then mark as completed
+            setTimeout(() => {
+                testStatus.isRunning = false;
+                testStatus.completedTime = new Date().toISOString();
+                console.log('Test status updated to completed at:', testStatus.completedTime);
+                
+                // Check if report file exists
+                const reportDir = path.join(__dirname, 'playwright-report');
+                const reportFile = path.join(reportDir, 'index.html');
+                
+                console.log('Checking for report directory at:', reportDir);
+                if (fs.existsSync(reportDir)) {
+                    console.log('Report directory exists');
+                    const files = fs.readdirSync(reportDir);
+                    console.log('Files in report directory:', files);
+                    
+                    if (fs.existsSync(reportFile)) {
+                        console.log('Report file confirmed to exist at:', reportFile);
+                    } else {
+                        console.log('Report file not found at:', reportFile);
+                    }
+                } else {
+                    console.log('Report directory does not exist');
+                }
+            }, 2000); // Wait 2 seconds for report generation
         });
         
         child.on('error', (error) => {
@@ -482,6 +526,7 @@ app.get('/run-tests', async (req, res) => {
             // Mark test as completed (with error)
             testStatus.isRunning = false;
             testStatus.completedTime = new Date().toISOString();
+            console.log('Test status updated to completed (with error) at:', testStatus.completedTime);
         });
         
     } catch (error) {
