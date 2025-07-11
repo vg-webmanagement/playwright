@@ -41,8 +41,18 @@ app.post('/run-crawler', async (req, res) => {
             ENV1: sanitizeInput(req.body.ENV1),
             ENV2: sanitizeInput(req.body.ENV2),
             DOMAIN1: sanitizeInput(req.body.DOMAIN1),
-            DOMAIN2: sanitizeInput(req.body.DOMAIN2)
+            DOMAIN2: sanitizeInput(req.body.DOMAIN2),
+            selectedTests: Array.isArray(req.body.selectedTests) ? req.body.selectedTests : [req.body.selectedTests]
         };
+        
+        // Validate that at least one test is selected
+        if (!formData.selectedTests || formData.selectedTests.length === 0) {
+            return res.status(400).send(`
+                <h1>Error: No Tests Selected</h1>
+                <p>Please select at least one test to run.</p>
+                <a href="/">Back to Form</a>
+            `);
+        }
 
         console.log('Form data received:', formData);
 
@@ -228,21 +238,25 @@ app.get('/run-tests', async (req, res) => {
                 <a href="/">Back to Form</a>
             `);
         }
+        
+        if (!formData.selectedTests || formData.selectedTests.length === 0) {
+            return res.status(400).send(`
+                <h1>Error: No Tests Selected</h1>
+                <p>Please go back and select at least one test to run.</p>
+                <a href="/">Back to Form</a>
+            `);
+        }
 
         console.log('Running Playwright tests with:', formData);
         
-        // Build the command with environment variables
-        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test --project=chromium --reporter=html`;
+        // Build the command with environment variables and selected test files
+        const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
+        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html`;
         
         console.log('Running test command:', testCommand);
         
-        // Start the response
-        res.writeHead(200, {
-            'Content-Type': 'text/html',
-            'Transfer-Encoding': 'chunked'
-        });
-        
-        res.write(`
+        // Show the initial page immediately
+        res.send(`
             <!DOCTYPE html>
             <html lang="en">
             <head>
@@ -268,34 +282,47 @@ app.get('/run-tests', async (req, res) => {
                         text-align: center;
                         margin-bottom: 30px;
                     }
-                    .output {
-                        background-color: #000;
-                        color: #00ff00;
+                    .status {
                         padding: 20px;
                         border-radius: 4px;
-                        font-family: monospace;
-                        font-size: 14px;
-                        white-space: pre-wrap;
-                        overflow-x: auto;
                         margin-bottom: 20px;
+                        text-align: center;
+                        font-size: 16px;
+                    }
+                    .status.running {
+                        background-color: #fff3cd;
+                        color: #856404;
+                        border: 1px solid #ffeaa7;
+                    }
+                    .status.completed {
+                        background-color: #d4edda;
+                        color: #155724;
+                        border: 1px solid #c3e6cb;
+                    }
+                    .status.error {
+                        background-color: #f8d7da;
+                        color: #721c24;
+                        border: 1px solid #f5c6cb;
                     }
                     .links {
                         margin-top: 20px;
                         padding: 20px;
                         background-color: #f9f9f9;
                         border-radius: 4px;
+                        text-align: center;
                     }
                     .btn {
                         background-color: #4CAF50;
                         color: white;
-                        padding: 10px 20px;
+                        padding: 12px 24px;
                         border: none;
                         border-radius: 4px;
                         cursor: pointer;
                         font-size: 16px;
-                        margin-right: 10px;
+                        margin: 5px;
                         text-decoration: none;
                         display: inline-block;
+                        transition: background-color 0.3s;
                     }
                     .btn:hover {
                         background-color: #45a049;
@@ -306,48 +333,107 @@ app.get('/run-tests', async (req, res) => {
                     .btn-secondary:hover {
                         background-color: #5a6268;
                     }
+                    .test-info {
+                        margin-bottom: 20px;
+                        padding: 15px;
+                        background-color: #e8f5e8;
+                        border-radius: 4px;
+                    }
+                    .spinner {
+                        border: 4px solid #f3f3f3;
+                        border-top: 4px solid #3498db;
+                        border-radius: 50%;
+                        width: 40px;
+                        height: 40px;
+                        animation: spin 1s linear infinite;
+                        margin: 0 auto 20px;
+                    }
+                    @keyframes spin {
+                        0% { transform: rotate(0deg); }
+                        100% { transform: rotate(360deg); }
+                    }
                 </style>
+                <script>
+                    let testCompleted = false;
+                    
+                    function checkTestStatus() {
+                        if (testCompleted) return;
+                        
+                        // Check if report exists by trying to access it
+                        fetch('/playwright-report/index.html')
+                            .then(response => {
+                                if (response.ok) {
+                                    document.getElementById('status').className = 'status completed';
+                                    document.getElementById('status').innerHTML = '✅ <strong>Tests Completed Successfully!</strong><br>Results are ready to view.';
+                                    document.getElementById('spinner').style.display = 'none';
+                                    document.getElementById('reportBtn').style.display = 'inline-block';
+                                    testCompleted = true;
+                                }
+                            })
+                            .catch(() => {
+                                // Report not ready yet, continue polling
+                            });
+                    }
+                    
+                    // Poll every 3 seconds
+                    setInterval(checkTestStatus, 3000);
+                    
+                    // Initial check after 5 seconds
+                    setTimeout(checkTestStatus, 5000);
+                </script>
             </head>
             <body>
                 <div class="container">
-                    <h1>Running Playwright Tests</h1>
-                    <div class="output" id="output">
-        `);
-        
-        // Execute the command and stream output
-        const child = exec(testCommand, { cwd: __dirname });
-        
-        child.stdout.on('data', (data) => {
-            const escapedData = data.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            res.write(escapedData);
-        });
-        
-        child.stderr.on('data', (data) => {
-            const escapedData = data.toString().replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            res.write(`<span style="color: #ff6b6b;">${escapedData}</span>`);
-        });
-        
-        child.on('close', (code) => {
-            res.write(`
+                    <h1>Playwright Test Execution</h1>
+                    
+                    <div class="test-info">
+                        <h3>Selected Tests:</h3>
+                        <ul>
+                            ${formData.selectedTests.map(test => {
+                                const testName = test.replace('.test.mjs', '');
+                                const displayName = testName === 'pixel' ? 'Pixel Comparison Tests' :
+                                                  testName === 'textcompare' ? 'Text Content Comparison Tests' :
+                                                  testName === 'titleandmeta' ? 'Title & Meta Tag Tests' : testName;
+                                return `<li><strong>${displayName}</strong> (${test})</li>`;
+                            }).join('')}
+                        </ul>
                     </div>
+                    
+                    <div id="spinner" class="spinner"></div>
+                    
+                    <div id="status" class="status running">
+                        🔄 <strong>Tests are running...</strong><br>
+                        Please wait while the tests execute. This page will automatically update when complete.
+                    </div>
+                    
                     <div class="links">
-                        <h3>Test Results</h3>
-                        <p>Test execution completed with exit code: ${code}</p>
-                        <a href="/playwright-report/index.html" class="btn" target="_blank">View HTML Report</a>
+                        <h3>Actions</h3>
+                        <a href="/playwright-report/index.html" id="reportBtn" class="btn" target="_blank" style="display: none;">View HTML Report</a>
                         <a href="/edit-urls" class="btn btn-secondary">Edit URLs</a>
                         <a href="/" class="btn btn-secondary">Back to Form</a>
                     </div>
                 </div>
             </body>
             </html>
-            `);
-            res.end();
+        `);
+        
+        // Execute the command in the background
+        const child = exec(testCommand, { cwd: __dirname });
+        
+        child.stdout.on('data', (data) => {
+            console.log('Test stdout:', data.toString());
+        });
+        
+        child.stderr.on('data', (data) => {
+            console.error('Test stderr:', data.toString());
+        });
+        
+        child.on('close', (code) => {
+            console.log(`Test execution completed with exit code: ${code}`);
         });
         
         child.on('error', (error) => {
             console.error('Test execution error:', error);
-            res.write(`<span style="color: #ff6b6b;">Error: ${error.message}</span>`);
-            res.end();
         });
         
     } catch (error) {

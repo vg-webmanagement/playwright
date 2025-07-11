@@ -43,6 +43,11 @@ Fill out the form with the following information:
 - **DOMAIN1**: First domain for comparison
 - **DOMAIN2**: Second domain for comparison
 
+**Test Selection:**
+- **Pixel Comparison Tests**: Visual comparison between environments using pixel-perfect matching
+- **Text Content Comparison Tests**: Compare rendered text content between environments
+- **Title & Meta Tag Tests**: Compare page titles and meta descriptions between environments
+
 ### 2. Run Crawler
 
 - Click "Start Crawler" to execute the web crawler
@@ -57,6 +62,7 @@ Fill out the form with the following information:
 
 ### 4. Execute Tests
 
+- Select which test types to run (pixel comparison, text comparison, title/meta comparison)
 - Run Playwright tests with your configured parameters
 - View real-time test execution output
 - Access detailed HTML reports
