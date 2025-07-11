@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit URLs - QA Dashboard</title>
+    <link rel="stylesheet" href="/edit-urls.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Edit URLs</h1>
+        
+        <form action="/save-urls" method="POST">
+            <div class="help-text">
+                Edit the URLs below. This should be a valid JSON array of strings.
+            </div>
+            <textarea name="urls" required>{{URLS_CONTENT}}</textarea>
+            <br>
+            <button type="submit" class="submit-btn">Save URLs & Run Tests</button>
+            <a href="/" class="back-btn">Back to Form</a>
+        </form>
+    </div>
+</body>
+</html> 

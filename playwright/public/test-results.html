@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Results - QA Dashboard</title>
+    <link rel="stylesheet" href="/test-results.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Playwright Test Execution</h1>
+        
+        <div class="test-info">
+            <h3>Selected Tests:</h3>
+            <ul>
+                {{SELECTED_TESTS}}
+            </ul>
+        </div>
+        
+        <div id="status" class="status running">
+            🔄 <strong>Tests are running...</strong><br>
+            Please wait while the tests execute. This page will automatically update when complete.
+        </div>
+        
+        <div id="progressSection" class="progress-section" style="display: none;">
+            <h4>Test Progress</h4>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+            </div>
+            <div id="progressText" class="progress-text">Initializing tests...</div>
+            <div id="currentTest" class="current-test" style="display: none;"></div>
+        </div>
+        
+        <div id="resultsSection" class="progress-section" style="display: none;">
+            <h4>Test Results Summary</h4>
+            <div class="results-grid">
+                <div id="passedUrlsColumn" class="result-column">
+                    <h5>✅ Processed URLs</h5>
+                    <div id="passedUrls" class="url-list"></div>
+                </div>
+                <div id="noMetaUrlsColumn" class="result-column">
+                    <h5>⚠️ Missing Meta/Title</h5>
+                    <div id="noMetaUrls" class="url-list"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="links">
+            <h3>Actions</h3>
+            <a href="/playwright-report/index.html" id="reportBtn" class="btn" target="_blank" style="display: none;">View HTML Report</a>
+            <a href="/edit-urls" class="btn btn-secondary">Edit URLs</a>
+            <a href="/" class="btn btn-secondary">Back to Form</a>
+        </div>
+    </div>
+    
+    <script src="/test-results.js"></script>
+</body>
+</html> 
