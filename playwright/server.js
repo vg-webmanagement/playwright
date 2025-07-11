@@ -391,6 +391,10 @@ function parseTestProgress(output) {
                     testProgress.failed++;
                 }
                 testProgress.completed = testProgress.passed + testProgress.failed;
+                
+                const timestamp = new Date().toISOString();
+                console.log(`✅ [${timestamp}] INDIVIDUAL TEST COMPLETE: ${testName} - ${result} (Progress: ${testProgress.completed}/${testProgress.total})`);
+                
                 shouldBroadcast = true;
             }
         }
@@ -398,6 +402,11 @@ function parseTestProgress(output) {
         // Match final summary: "5 failed" or "3 passed" (only for logging, not completion)
         const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)\s*$/);
         if (finalMatch) {
+            const count = parseInt(finalMatch[1]);
+            const status = finalMatch[2];
+            const timestamp = new Date().toISOString();
+            console.log(`📊 [${timestamp}] FINAL SUMMARY DETECTED: ${count} ${status} (Current progress: ${testProgress.completed}/${testProgress.total})`);
+            
             // Just log this, don't trigger completion - let process close handle that
             shouldBroadcast = true;
         }
@@ -1013,77 +1022,76 @@ app.get('/run-tests', async (req, res) => {
         
                 child.stdout.on('data', (data) => {
             const output = data.toString();
+            const timestamp = new Date().toISOString();
+            
+            // Log key events for debugging
+            if (output.includes('Serving HTML report at')) {
+                console.log(`🎯 [${timestamp}] DETECTED: Serving HTML report`);
+            }
+            
+            if (output.match(/^\s*\d+\s+(passed|failed)\s*$/)) {
+                console.log(`🎯 [${timestamp}] DETECTED: Final summary line in output`);
+            }
             
             // Parse test progress from output
             parseTestProgress(output);
-            
-            // Check if this indicates test completion
-            if (output.includes('Serving HTML report at') || 
-                output.match(/^\s*\d+\s+(passed|failed)\s*$/) ||
-                (output.includes('failed') && output.match(/\d+\s+failed/)) ||
-                (output.includes('passed') && output.match(/\d+\s+passed/))) {
-                
-                // Tests are likely complete, check for report file
-                setTimeout(() => {
-                    const reportFile = path.join(__dirname, 'playwright-report', 'index.html');
-                    if (fs.existsSync(reportFile) && testStatus.isRunning) {
-                        testStatus.isRunning = false;
-                        testStatus.completedTime = new Date().toISOString();
-                        
-                        // Update progress to completed
-                        testProgress.stage = 'completed';
-                        broadcastProgress();
-                        logProgress();
-                        
-                        // Kill the child process since we no longer need it
-                        if (currentTestProcess) {
-                            try {
-                                currentTestProcess.kill('SIGTERM');
-                            } catch (error) {
-                                // Silent error handling
-                            }
-                        }
-                    }
-                }, 3000); // Wait 3 seconds for report to be fully written
-            }
         });
         
         child.stderr.on('data', (data) => {
-            // Silent error handling
+            const timestamp = new Date().toISOString();
+            console.log(`🚨 [${timestamp}] STDERR: ${data.toString().trim()}`);
         });
         
         child.on('close', (code) => {
+            const timestamp = new Date().toISOString();
+            console.log(`🏁 [${timestamp}] PROCESS CLOSE EVENT - Exit code: ${code}`);
+            console.log(`🏁 [${timestamp}] Current progress: ${testProgress.completed}/${testProgress.total} (${testProgress.passed} passed, ${testProgress.failed} failed)`);
+            console.log(`🏁 [${timestamp}] Test status isRunning: ${testStatus.isRunning}`);
+            
             currentTestProcess = null;
             
             // Only update status if not already marked as completed
             if (testStatus.isRunning) {
+                console.log(`🏁 [${timestamp}] Setting completion in 2 seconds...`);
                 // Wait a moment for report files to be written, then mark as completed
                 setTimeout(() => {
+                    const completionTimestamp = new Date().toISOString();
                     if (testStatus.isRunning) { // Check again in case it was marked complete elsewhere
+                        console.log(`🏁 [${completionTimestamp}] SETTING COMPLETION - Final counts: ${testProgress.completed}/${testProgress.total}`);
+                        
                         testStatus.isRunning = false;
-                        testStatus.completedTime = new Date().toISOString();
+                        testStatus.completedTime = completionTimestamp;
                         
                         // Set completion when process closes - this is the definitive signal
                         testProgress.stage = 'completed';
                         broadcastProgress();
                         logProgress();
                         
-                        console.log('✅ Test execution completed');
+                        console.log(`✅ [${completionTimestamp}] Test execution completed`);
+                    } else {
+                        console.log(`🏁 [${completionTimestamp}] Already marked complete, skipping`);
                     }
                 }, 2000); // Wait 2 seconds for report generation
+            } else {
+                console.log(`🏁 [${timestamp}] Tests already marked as not running, skipping completion`);
             }
         });
         
         child.on('error', (error) => {
+            const timestamp = new Date().toISOString();
+            console.log(`💥 [${timestamp}] PROCESS ERROR EVENT: ${error.message}`);
+            
             currentTestProcess = null;
             // Mark test as completed (with error)
             testStatus.isRunning = false;
-            testStatus.completedTime = new Date().toISOString();
+            testStatus.completedTime = timestamp;
             
             // Set completion when process errors - this is the definitive signal  
             testProgress.stage = 'completed';
             broadcastProgress();
             logProgress();
+            
+            console.log(`💥 [${timestamp}] Marked complete due to error`);
         });
         
     } catch (error) {
