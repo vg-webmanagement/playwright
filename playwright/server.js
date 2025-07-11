@@ -26,6 +26,20 @@ let testStatus = {
 // Track the current test process
 let currentTestProcess = null;
 
+// Test progress tracking
+let testProgress = {
+    currentTest: '',
+    completed: 0,
+    total: 0,
+    failed: 0,
+    passed: 0,
+    currentFile: '',
+    stage: 'idle' // 'running', 'completed'
+};
+
+// Store SSE connections for real-time updates
+let sseClients = [];
+
 // Serve static files from playwright-report directory
 app.use('/playwright-report', express.static(path.join(__dirname, 'playwright-report')));
 
@@ -232,11 +246,96 @@ app.get('/test-status', (req, res) => {
     res.json(testStatus);
 });
 
-// Route 5.1: Reset test status (for debugging)
+// Route 5.1: Server-Sent Events for real-time progress
+app.get('/progress', (req, res) => {
+    res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+    });
+
+    // Send initial progress state
+    res.write(`data: ${JSON.stringify(testProgress)}\n\n`);
+
+    // Add this client to the list
+    sseClients.push(res);
+
+    // Remove client when connection closes
+    req.on('close', () => {
+        sseClients = sseClients.filter(client => client !== res);
+    });
+});
+
+// Function to broadcast progress updates
+function broadcastProgress() {
+    const data = `data: ${JSON.stringify(testProgress)}\n\n`;
+    sseClients.forEach(client => {
+        try {
+            client.write(data);
+        } catch (error) {
+            // Remove dead connections
+            sseClients = sseClients.filter(c => c !== client);
+        }
+    });
+}
+
+// Function to parse test progress from Playwright output
+function parseTestProgress(output) {
+    const lines = output.split('\n');
+    
+    lines.forEach(line => {
+        // Match running test pattern: [chromium] › tests/pixel.test.mjs:79:5 › Test Name
+        const runningMatch = line.match(/\[chromium\]\s*›\s*tests\/([^:]+).*?›\s*(.+?)(?:\s*───|$)/);
+        if (runningMatch) {
+            testProgress.currentFile = runningMatch[1];
+            testProgress.currentTest = runningMatch[2].trim();
+            broadcastProgress();
+        }
+        
+        // Match completion summary: "4 failed" or "6 passed"
+        const summaryMatch = line.match(/(\d+)\s+(passed|failed)/);
+        if (summaryMatch) {
+            const count = parseInt(summaryMatch[1]);
+            const status = summaryMatch[2];
+            
+            if (status === 'passed') {
+                testProgress.passed = count;
+            } else if (status === 'failed') {
+                testProgress.failed = count;
+            }
+            
+            testProgress.completed = testProgress.passed + testProgress.failed;
+            broadcastProgress();
+        }
+        
+        // Extract total test count when available
+        const totalMatch = line.match(/Running\s+(\d+)\s+tests?/);
+        if (totalMatch) {
+            testProgress.total = parseInt(totalMatch[1]);
+            broadcastProgress();
+        }
+    });
+}
+
+// Route 5.2: Reset test status (for debugging)
 app.post('/reset-test-status', (req, res) => {
     testStatus.isRunning = false;
     testStatus.startTime = null;
     testStatus.completedTime = null;
+    
+    // Reset progress data
+    testProgress = {
+        currentTest: '',
+        completed: 0,
+        total: 0,
+        failed: 0,
+        passed: 0,
+        currentFile: '',
+        stage: 'idle'
+    };
+    broadcastProgress();
+    
     if (currentTestProcess) {
         try {
             currentTestProcess.kill('SIGTERM');
@@ -273,6 +372,18 @@ app.get('/run-tests', async (req, res) => {
         testStatus.isRunning = true;
         testStatus.startTime = new Date().toISOString();
         testStatus.completedTime = null;
+        
+        // Reset and initialize progress tracking
+        testProgress = {
+            currentTest: '',
+            completed: 0,
+            total: 0,
+            failed: 0,
+            passed: 0,
+            currentFile: '',
+            stage: 'running'
+        };
+        broadcastProgress();
         
         // Clean up old report directory to ensure fresh results
         const reportDir = path.join(__dirname, 'playwright-report');
@@ -395,9 +506,100 @@ app.get('/run-tests', async (req, res) => {
                         0% { transform: rotate(0deg); }
                         100% { transform: rotate(360deg); }
                     }
+                    .progress-section {
+                        margin: 20px 0;
+                        padding: 20px;
+                        background-color: #f8f9fa;
+                        border-radius: 4px;
+                        border: 1px solid #dee2e6;
+                    }
+                    .progress-bar {
+                        width: 100%;
+                        height: 20px;
+                        background-color: #e9ecef;
+                        border-radius: 10px;
+                        overflow: hidden;
+                        margin: 10px 0;
+                    }
+                    .progress-fill {
+                        height: 100%;
+                        background-color: #28a745;
+                        transition: width 0.3s ease;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        color: white;
+                        font-size: 12px;
+                        font-weight: bold;
+                    }
+                    .progress-text {
+                        font-size: 14px;
+                        color: #495057;
+                        margin: 5px 0;
+                    }
+                    .current-test {
+                        font-family: monospace;
+                        background-color: #f1f3f4;
+                        padding: 8px;
+                        border-radius: 4px;
+                        margin: 10px 0;
+                        border-left: 4px solid #007bff;
+                    }
                 </style>
                 <script>
                     let testCompleted = false;
+                    let eventSource = null;
+                    
+                    function connectToProgress() {
+                        eventSource = new EventSource('/progress');
+                        
+                        eventSource.onmessage = function(event) {
+                            const progress = JSON.parse(event.data);
+                            updateProgressDisplay(progress);
+                        };
+                        
+                        eventSource.onerror = function() {
+                            // Reconnect after a delay if connection fails
+                            setTimeout(connectToProgress, 5000);
+                        };
+                    }
+                    
+                    function updateProgressDisplay(progress) {
+                        const progressSection = document.getElementById('progressSection');
+                        const progressBar = document.getElementById('progressBar');
+                        const progressFill = document.getElementById('progressFill');
+                        const currentTestDiv = document.getElementById('currentTest');
+                        
+                        if (progress.stage === 'running') {
+                            progressSection.style.display = 'block';
+                            
+                            // Update progress bar
+                            const percentage = progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
+                            progressFill.style.width = percentage + '%';
+                            progressFill.textContent = percentage + '%';
+                            
+                            // Update progress text
+                            document.getElementById('progressText').innerHTML = 
+                                \`Progress: \${progress.completed}/\${progress.total} tests completed \` +
+                                \`(\${progress.passed} passed, \${progress.failed} failed)\`;
+                            
+                            // Update current test
+                            if (progress.currentTest) {
+                                currentTestDiv.style.display = 'block';
+                                currentTestDiv.innerHTML = \`<strong>Running:</strong> \${progress.currentTest}\`;
+                            }
+                        } else if (progress.stage === 'completed') {
+                            progressSection.style.display = 'block';
+                            progressFill.style.width = '100%';
+                            progressFill.style.backgroundColor = '#28a745';
+                            progressFill.textContent = '100%';
+                            
+                            document.getElementById('progressText').innerHTML = 
+                                \`Completed: \${progress.completed} tests (\${progress.passed} passed, \${progress.failed} failed)\`;
+                            
+                            currentTestDiv.innerHTML = '<strong>All tests completed!</strong>';
+                        }
+                    }
                     
                     function checkTestStatus() {
                         if (testCompleted) return;
@@ -416,6 +618,11 @@ app.get('/run-tests', async (req, res) => {
                                                 document.getElementById('spinner').style.display = 'none';
                                                 document.getElementById('reportBtn').style.display = 'inline-block';
                                                 testCompleted = true;
+                                                
+                                                // Close progress connection
+                                                if (eventSource) {
+                                                    eventSource.close();
+                                                }
                                             } else {
                                                 // Test completed but report not ready yet
                                                 document.getElementById('status').innerHTML = '⏳ <strong>Generating report...</strong><br>Please wait while the report is being generated.';
@@ -432,7 +639,10 @@ app.get('/run-tests', async (req, res) => {
                             });
                     }
                     
-                    // Poll every 2 seconds
+                    // Connect to progress stream
+                    connectToProgress();
+                    
+                    // Poll every 2 seconds for completion check
                     setInterval(checkTestStatus, 2000);
                     
                     // Initial check after 3 seconds
@@ -463,6 +673,15 @@ app.get('/run-tests', async (req, res) => {
                         Please wait while the tests execute. This page will automatically update when complete.
                     </div>
                     
+                    <div id="progressSection" class="progress-section" style="display: none;">
+                        <h4>Test Progress</h4>
+                        <div class="progress-bar">
+                            <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+                        </div>
+                        <div id="progressText" class="progress-text">Initializing tests...</div>
+                        <div id="currentTest" class="current-test" style="display: none;"></div>
+                    </div>
+                    
                     <div class="links">
                         <h3>Actions</h3>
                         <a href="/playwright-report/index.html" id="reportBtn" class="btn" target="_blank" style="display: none;">View HTML Report</a>
@@ -481,6 +700,9 @@ app.get('/run-tests', async (req, res) => {
                 child.stdout.on('data', (data) => {
             const output = data.toString();
             
+            // Parse test progress from output
+            parseTestProgress(output);
+            
             // Check if this indicates test completion
             if (output.includes('Serving HTML report at') || 
                 output.includes('failed') || 
@@ -493,6 +715,10 @@ app.get('/run-tests', async (req, res) => {
                     if (fs.existsSync(reportFile) && testStatus.isRunning) {
                         testStatus.isRunning = false;
                         testStatus.completedTime = new Date().toISOString();
+                        
+                        // Update progress to completed
+                        testProgress.stage = 'completed';
+                        broadcastProgress();
                         
                         // Kill the child process since we no longer need it
                         if (currentTestProcess) {
