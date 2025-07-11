@@ -67,6 +67,7 @@ Fill out the form with the following information:
 - Run Playwright tests with your configured parameters
 - Monitor progress with real-time progress bars showing:
   - Current test being executed
+  - Test completion status (PASSED/FAILED/ERROR)
   - Number of tests completed/total
   - Pass/fail counts
 - Access detailed HTML reports

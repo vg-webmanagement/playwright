@@ -88,20 +88,28 @@ urlsData.forEach((url) => {
       // Check for missing meta or title
       if (!env1Title || !env2Title || !env1MetaDescription || !env2MetaDescription) {
         console.warn(`Missing meta or title for ${testLabel}.`);
+        console.log(`Title & Meta Tag Tests for ${testLabel} ended - PASSED (missing meta)`);
         addNoMetaUrl(url); // Add to nometa.json
         return; // Skip further validation
       }
 
       // Validate title and meta tags
-      expect(env2Title).toBe(env1Title);
-      expect(env2MetaDescription).toBe(env1MetaDescription);
+      try {
+        expect(env2Title).toBe(env1Title);
+        expect(env2MetaDescription).toBe(env1MetaDescription);
+      } catch (assertionError) {
+        console.log(`Title & Meta Tag Tests for ${testLabel} ended - FAILED`);
+        throw assertionError;
+      }
 
       console.log(`Comparison completed for ${testLabel}.`);
+      console.log(`Title & Meta Tag Tests for ${testLabel} ended - PASSED`);
 
       // Add the passed URL to the shared file
       addPassedUrl(url);
     } catch (error) {
       console.error(`An error occurred while comparing ${testLabel}:`, error);
+      console.log(`Title & Meta Tag Tests for ${testLabel} ended - ERROR`);
       throw error; // Rethrow to fail the test if there was an error
     } finally {
       await page.close(); // Ensure the page is closed after the test

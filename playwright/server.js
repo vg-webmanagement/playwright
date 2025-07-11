@@ -344,6 +344,25 @@ function parseTestProgress(output) {
             }
         }
         
+        // Match test completion: "Pixel Comparison for -blog ended - PASSED/FAILED/ERROR"
+        // Also matches: "Text Content Comparison for X ended - STATUS" and "Title & Meta Tag Tests for X ended - STATUS"
+        const endedMatch = line.match(/(.+) ended - (PASSED|FAILED|ERROR)(\s*\([^)]+\))?/);
+        if (endedMatch) {
+            const testName = endedMatch[1];
+            const result = endedMatch[2];
+            const note = endedMatch[3] || '';
+            testProgress.currentTest = `${testName} ended - ${result}${note}`;
+            
+            // Update counters based on result
+            if (result === 'PASSED') {
+                testProgress.passed++;
+            } else if (result === 'FAILED' || result === 'ERROR') {
+                testProgress.failed++;
+            }
+            testProgress.completed = testProgress.passed + testProgress.failed;
+            shouldBroadcast = true;
+        }
+        
         // Match final summary: "5 failed" or "3 passed, 2 failed"
         const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)$/);
         if (finalMatch) {

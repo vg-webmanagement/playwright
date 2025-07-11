@@ -129,12 +129,14 @@ urlsData.forEach((url) => {
                 const diffImagePath = path.join(screenshotsFolder, `diff-${testLabel}.png`);
                 fs.writeFileSync(diffImagePath, PNG.sync.write(diff));
                 console.log(`Diff image created for ${testLabel}.`);
+                console.log(`Pixel Comparison for ${testLabel} ended - FAILED`);
 
                 test.info().attach('Diff Image', { body: PNG.sync.write(diff), contentType: 'image/png' });
 
                 throw new Error(`Test failed: Found ${mismatchedPixels} mismatched pixels. Check the attached diff image for details.`);
             } else {
                 console.log(`No differences found for ${testLabel}.`);
+                console.log(`Pixel Comparison for ${testLabel} ended - PASSED`);
 
                 // Add the passed URL to the shared file
                 addPassedUrl(url);
@@ -142,6 +144,7 @@ urlsData.forEach((url) => {
 
         } catch (error) {
             console.error(`An error occurred while comparing ${testLabel}:`, error);
+            console.log(`Pixel Comparison for ${testLabel} ended - ERROR`);
             throw error;
         } finally {
             await page.close();
