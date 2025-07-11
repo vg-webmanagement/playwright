@@ -339,16 +339,12 @@ function logProgress() {
     }
 }
 
-// Function to parse test progress from Playwright output
+// Function to parse test progress from Playwright output (silently)
 function parseTestProgress(output) {
     const lines = output.split('\n').filter(line => line.trim()); // Remove empty lines
     let shouldBroadcast = false;
     
     lines.forEach(line => {
-        // Skip lines that look like partial/corrupted output
-        if (line.includes('139 |') || line.includes('console.log') || line.length < 10) {
-            return;
-        }
         
         // Match "Running X tests using Y workers"
         const runningMatch = line.match(/^Running\s+(\d+)\s+tests?\s+using/);
@@ -636,7 +632,7 @@ app.get('/run-tests', async (req, res) => {
         
         // Build the command with environment variables and selected test files
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
-        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=2`;
+        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8 --quiet`;
         
         console.log('🧪 Executing command:', testCommand);
         
@@ -1016,11 +1012,12 @@ app.get('/run-tests', async (req, res) => {
             </html>
         `);
         
-        // Execute the command in the background with extended options
+        // Execute the command in the background with extended options and suppressed output
         const child = exec(testCommand, { 
             cwd: __dirname,
             maxBuffer: 1024 * 1024 * 10, // 10MB buffer to prevent issues with large output
-            timeout: 0 // Disable timeout - let tests run as long as needed
+            timeout: 0, // Disable timeout - let tests run as long as needed
+            stdio: ['pipe', 'pipe', 'pipe'] // Capture all streams but don't inherit
         });
         currentTestProcess = child;
         
@@ -1039,7 +1036,7 @@ app.get('/run-tests', async (req, res) => {
                 console.log(`🎯 [${timestamp}] DETECTED: Final summary line in output`);
             }
             
-            // Parse test progress from output
+            // Parse test progress from output (but don't display raw output)
             parseTestProgress(output);
         });
         
