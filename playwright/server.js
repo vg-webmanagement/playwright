@@ -401,10 +401,24 @@ function parseTestProgress(output) {
             const count = parseInt(finalMatch[1]);
             const status = finalMatch[2];
             
-            // Only update if this is the final authoritative count
-            if (status === 'failed' && testProgress.completed >= testProgress.total) {
+            // Update final counts when we see the summary
+            if (status === 'failed') {
                 testProgress.failed = count;
-                testProgress.passed = testProgress.total - count;
+                testProgress.passed = Math.max(0, testProgress.total - count);
+                testProgress.completed = testProgress.total;
+                shouldBroadcast = true;
+            } else if (status === 'passed') {
+                testProgress.passed = count;
+                testProgress.failed = Math.max(0, testProgress.total - count);
+                testProgress.completed = testProgress.total;
+                shouldBroadcast = true;
+            }
+        }
+        
+        // Detect completion patterns
+        if (line.includes('Serving HTML report at')) {
+            // Tests are definitely complete
+            if (testProgress.completed < testProgress.total) {
                 testProgress.completed = testProgress.total;
                 shouldBroadcast = true;
             }
@@ -490,18 +504,38 @@ app.post('/cleanup-reports', (req, res) => {
         { name: 'screenshots', path: path.join(__dirname, 'screenshots') }
     ];
     
+    const filesToClean = [
+        { name: 'urls-passed.json', path: path.join(__dirname, 'tests', 'urls-passed.json') },
+        { name: 'nometa.json', path: path.join(__dirname, 'tests', 'nometa.json') }
+    ];
+    
     const cleanupResults = [];
     
+    // Clean folders
     foldersToClean.forEach(folder => {
         try {
             if (fs.existsSync(folder.path)) {
                 fs.rmSync(folder.path, { recursive: true, force: true });
-                cleanupResults.push({ folder: folder.name, status: 'cleaned' });
+                cleanupResults.push({ item: folder.name, type: 'folder', status: 'cleaned' });
             } else {
-                cleanupResults.push({ folder: folder.name, status: 'not found' });
+                cleanupResults.push({ item: folder.name, type: 'folder', status: 'not found' });
             }
         } catch (error) {
-            cleanupResults.push({ folder: folder.name, status: 'error', error: error.message });
+            cleanupResults.push({ item: folder.name, type: 'folder', status: 'error', error: error.message });
+        }
+    });
+    
+    // Clean files
+    filesToClean.forEach(file => {
+        try {
+            if (fs.existsSync(file.path)) {
+                fs.unlinkSync(file.path);
+                cleanupResults.push({ item: file.name, type: 'file', status: 'cleaned' });
+            } else {
+                cleanupResults.push({ item: file.name, type: 'file', status: 'not found' });
+            }
+        } catch (error) {
+            cleanupResults.push({ item: file.name, type: 'file', status: 'error', error: error.message });
         }
     });
     
@@ -581,6 +615,26 @@ app.get('/run-tests', async (req, res) => {
         if (fs.existsSync(screenshotsDir)) {
             try {
                 fs.rmSync(screenshotsDir, { recursive: true, force: true });
+            } catch (error) {
+                // Silent error handling
+            }
+        }
+        
+        // Clean up test result files to ensure fresh results
+        const urlsPassedFile = path.join(__dirname, 'tests', 'urls-passed.json');
+        const noMetaFile = path.join(__dirname, 'tests', 'nometa.json');
+        
+        if (fs.existsSync(urlsPassedFile)) {
+            try {
+                fs.unlinkSync(urlsPassedFile);
+            } catch (error) {
+                // Silent error handling
+            }
+        }
+        
+        if (fs.existsSync(noMetaFile)) {
+            try {
+                fs.unlinkSync(noMetaFile);
             } catch (error) {
                 // Silent error handling
             }
@@ -718,7 +772,7 @@ app.get('/run-tests', async (req, res) => {
                     }
                     .results-grid {
                         display: grid;
-                        grid-template-columns: 1fr 1fr;
+                        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
                         gap: 20px;
                         margin-top: 15px;
                     }
@@ -810,28 +864,41 @@ app.get('/run-tests', async (req, res) => {
                             .then(response => response.json())
                             .then(data => {
                                 const resultsSection = document.getElementById('resultsSection');
+                                const passedUrlsColumn = document.getElementById('passedUrlsColumn');
+                                const noMetaUrlsColumn = document.getElementById('noMetaUrlsColumn');
                                 const passedUrlsDiv = document.getElementById('passedUrls');
                                 const noMetaUrlsDiv = document.getElementById('noMetaUrls');
                                 
-                                // Display passed URLs
+                                let hasResults = false;
+                                
+                                // Display passed URLs only if they exist
                                 if (data.passedUrls && data.passedUrls.length > 0) {
                                     passedUrlsDiv.innerHTML = data.passedUrls
                                         .map(url => \`<div class="url-item">\${url}</div>\`)
                                         .join('');
+                                    passedUrlsColumn.style.display = 'block';
+                                    hasResults = true;
                                 } else {
-                                    passedUrlsDiv.innerHTML = '<div style="color: #6c757d; font-style: italic;">No URLs passed</div>';
+                                    passedUrlsColumn.style.display = 'none';
                                 }
                                 
-                                // Display no meta URLs
+                                // Display no meta URLs only if they exist
                                 if (data.noMetaUrls && data.noMetaUrls.length > 0) {
                                     noMetaUrlsDiv.innerHTML = data.noMetaUrls
                                         .map(url => \`<div class="url-item">\${url}</div>\`)
                                         .join('');
+                                    noMetaUrlsColumn.style.display = 'block';
+                                    hasResults = true;
                                 } else {
-                                    noMetaUrlsDiv.innerHTML = '<div style="color: #6c757d; font-style: italic;">No missing meta/title issues</div>';
+                                    noMetaUrlsColumn.style.display = 'none';
                                 }
                                 
-                                resultsSection.style.display = 'block';
+                                // Only show results section if there are results to display
+                                if (hasResults) {
+                                    resultsSection.style.display = 'block';
+                                } else {
+                                    resultsSection.style.display = 'none';
+                                }
                             })
                             .catch(error => {
                                 console.error('Error fetching test results:', error);
@@ -854,6 +921,9 @@ app.get('/run-tests', async (req, res) => {
                                                 document.getElementById('status').innerHTML = '✅ <strong>Tests Completed Successfully!</strong><br>Results are ready to view.';
                                                 document.getElementById('reportBtn').style.display = 'inline-block';
                                                 testCompleted = true;
+                                                
+                                                // Show results section when tests complete
+                                                updateTestResults();
                                                 
                                                 // Close progress connection
                                                 if (eventSource) {
@@ -919,11 +989,11 @@ app.get('/run-tests', async (req, res) => {
                     <div id="resultsSection" class="progress-section" style="display: none;">
                         <h4>Test Results Summary</h4>
                         <div class="results-grid">
-                            <div class="result-column">
+                            <div id="passedUrlsColumn" class="result-column">
                                 <h5>✅ Passed URLs</h5>
                                 <div id="passedUrls" class="url-list"></div>
                             </div>
-                            <div class="result-column">
+                            <div id="noMetaUrlsColumn" class="result-column">
                                 <h5>⚠️ Missing Meta/Title</h5>
                                 <div id="noMetaUrls" class="url-list"></div>
                             </div>
@@ -953,9 +1023,9 @@ app.get('/run-tests', async (req, res) => {
             
             // Check if this indicates test completion
             if (output.includes('Serving HTML report at') || 
-                output.includes('failed') || 
-                output.includes('passed') || 
-                output.match(/\d+ (passed|failed)/)) {
+                output.match(/^\s*\d+\s+(passed|failed)\s*$/) ||
+                (output.includes('failed') && output.match(/\d+\s+failed/)) ||
+                (output.includes('passed') && output.match(/\d+\s+passed/))) {
                 
                 // Tests are likely complete, check for report file
                 setTimeout(() => {
@@ -996,7 +1066,7 @@ app.get('/run-tests', async (req, res) => {
                     if (testStatus.isRunning) { // Check again in case it was marked complete elsewhere
                         testStatus.isRunning = false;
                         testStatus.completedTime = new Date().toISOString();
-                        console.log('✅ Test execution completed (fallback detection)');
+                        console.log('✅ Test execution completed');
                     }
                 }, 2000); // Wait 2 seconds for report generation
             }

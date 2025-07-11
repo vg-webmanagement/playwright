@@ -111,7 +111,7 @@ playwright/
 - `GET /progress` - Real-time test progress updates (Server-Sent Events)
 - `GET /test-results-files` - Get passed URLs and missing meta URLs (JSON)
 - `POST /reset-test-status` - Reset test status (for debugging)
-- `POST /cleanup-reports` - Clean up all report and screenshot folders
+- `POST /cleanup-reports` - Clean up all report folders, screenshots, and result files
 - `GET /playwright-report/*` - Static test reports
 
 ## Dependencies
@@ -129,7 +129,7 @@ playwright/
 - All file operations are performed locally
 - Test reports are automatically generated and served
 - Test execution status is tracked server-side to prevent showing stale results
-- Old test reports and screenshots are automatically cleaned up before new test runs
+- Old test reports, screenshots, and result files are automatically cleaned up before new test runs
 - Real-time progress updates use Server-Sent Events for live feedback
 - Progress tracking shows current test execution, completion counts, and pass/fail statistics
 - Server console displays progress updates for backend monitoring and debugging
