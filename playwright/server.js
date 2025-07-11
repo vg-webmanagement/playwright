@@ -339,12 +339,27 @@ function logProgress() {
     }
 }
 
-// Function to parse test progress from Playwright output (silently)
+// Function to parse test progress from Playwright output (with output filtering)
 function parseTestProgress(output) {
     const lines = output.split('\n').filter(line => line.trim()); // Remove empty lines
     let shouldBroadcast = false;
     
     lines.forEach(line => {
+        // Skip verbose output while keeping essential test completion messages
+        if (line.includes('at file:///') ||
+            line.includes('at /workspaces/') ||
+            line.includes('node_modules/playwright/lib/') ||
+            line.includes('TimeoutManager.withRunnable') ||
+            line.includes('TestInfoImpl._runAsStage') ||
+            line.includes('WorkerMain._runTest') ||
+            line.includes('WorkerMain.runTestGroup') ||
+            line.includes('at process.<anonymous>') ||
+            line.includes('An error occurred while comparing') ||
+            line.includes('Error: Test failed:') ||
+            line.includes('Check the attached diff image') ||
+            line.length < 10) {
+            return;
+        }
         
         // Match "Running X tests using Y workers"
         const runningMatch = line.match(/^Running\s+(\d+)\s+tests?\s+using/);
@@ -632,7 +647,7 @@ app.get('/run-tests', async (req, res) => {
         
         // Build the command with environment variables and selected test files
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
-        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8 --quiet`;
+        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8`;
         
         console.log('🧪 Executing command:', testCommand);
         
@@ -1016,8 +1031,7 @@ app.get('/run-tests', async (req, res) => {
         const child = exec(testCommand, { 
             cwd: __dirname,
             maxBuffer: 1024 * 1024 * 10, // 10MB buffer to prevent issues with large output
-            timeout: 0, // Disable timeout - let tests run as long as needed
-            stdio: ['pipe', 'pipe', 'pipe'] // Capture all streams but don't inherit
+            timeout: 0 // Disable timeout - let tests run as long as needed
         });
         currentTestProcess = child;
         
@@ -1036,8 +1050,10 @@ app.get('/run-tests', async (req, res) => {
                 console.log(`🎯 [${timestamp}] DETECTED: Final summary line in output`);
             }
             
-            // Parse test progress from output (but don't display raw output)
+            // Parse test progress from output (suppress raw output display)
             parseTestProgress(output);
+            
+            // Don't display the raw output - only our custom progress messages will show
         });
         
         child.stderr.on('data', (data) => {
