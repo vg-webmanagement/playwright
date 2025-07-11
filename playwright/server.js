@@ -518,7 +518,7 @@ app.get('/run-tests', async (req, res) => {
         
         // Build the command with environment variables and selected test files
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
-        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html`;
+        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8`;
         
         console.log('🧪 Executing command:', testCommand);
         
