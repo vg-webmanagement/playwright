@@ -860,14 +860,22 @@ app.get('/run-tests', async (req, res) => {
                     }
                     
                     function updateTestResults() {
+                        console.log('Updating test results...');
                         fetch('/test-results-files')
                             .then(response => response.json())
                             .then(data => {
+                                console.log('Test results data:', data);
                                 const resultsSection = document.getElementById('resultsSection');
                                 const passedUrlsColumn = document.getElementById('passedUrlsColumn');
                                 const noMetaUrlsColumn = document.getElementById('noMetaUrlsColumn');
                                 const passedUrlsDiv = document.getElementById('passedUrls');
                                 const noMetaUrlsDiv = document.getElementById('noMetaUrls');
+                                
+                                // Check if all required elements exist
+                                if (!resultsSection || !passedUrlsColumn || !noMetaUrlsColumn || !passedUrlsDiv || !noMetaUrlsDiv) {
+                                    console.error('Some required DOM elements are missing');
+                                    return;
+                                }
                                 
                                 let hasResults = false;
                                 
@@ -878,8 +886,10 @@ app.get('/run-tests', async (req, res) => {
                                         .join('');
                                     passedUrlsColumn.style.display = 'block';
                                     hasResults = true;
+                                    console.log('Showing passed URLs:', data.passedUrls.length);
                                 } else {
                                     passedUrlsColumn.style.display = 'none';
+                                    console.log('No passed URLs to display');
                                 }
                                 
                                 // Display no meta URLs only if they exist
@@ -889,15 +899,19 @@ app.get('/run-tests', async (req, res) => {
                                         .join('');
                                     noMetaUrlsColumn.style.display = 'block';
                                     hasResults = true;
+                                    console.log('Showing no meta URLs:', data.noMetaUrls.length);
                                 } else {
                                     noMetaUrlsColumn.style.display = 'none';
+                                    console.log('No meta URLs to display');
                                 }
                                 
                                 // Only show results section if there are results to display
                                 if (hasResults) {
                                     resultsSection.style.display = 'block';
+                                    console.log('Results section shown');
                                 } else {
                                     resultsSection.style.display = 'none';
+                                    console.log('Results section hidden - no results to display');
                                 }
                             })
                             .catch(error => {
@@ -921,9 +935,6 @@ app.get('/run-tests', async (req, res) => {
                                                 document.getElementById('status').innerHTML = '✅ <strong>Tests Completed Successfully!</strong><br>Results are ready to view.';
                                                 document.getElementById('reportBtn').style.display = 'inline-block';
                                                 testCompleted = true;
-                                                
-                                                // Show results section when tests complete
-                                                updateTestResults();
                                                 
                                                 // Close progress connection
                                                 if (eventSource) {
