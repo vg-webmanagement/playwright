@@ -636,7 +636,7 @@ app.get('/run-tests', async (req, res) => {
         
         // Build the command with environment variables and selected test files
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
-        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8`;
+        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=2`;
         
         console.log('🧪 Executing command:', testCommand);
         
@@ -1016,9 +1016,15 @@ app.get('/run-tests', async (req, res) => {
             </html>
         `);
         
-        // Execute the command in the background
-        const child = exec(testCommand, { cwd: __dirname });
+        // Execute the command in the background with extended options
+        const child = exec(testCommand, { 
+            cwd: __dirname,
+            maxBuffer: 1024 * 1024 * 10, // 10MB buffer to prevent issues with large output
+            timeout: 0 // Disable timeout - let tests run as long as needed
+        });
         currentTestProcess = child;
+        
+        console.log(`🚀 [${new Date().toISOString()}] Process started with PID: ${child.pid}`);
         
                 child.stdout.on('data', (data) => {
             const output = data.toString();
@@ -1042,11 +1048,19 @@ app.get('/run-tests', async (req, res) => {
             console.log(`🚨 [${timestamp}] STDERR: ${data.toString().trim()}`);
         });
         
-        child.on('close', (code) => {
+        child.on('close', (code, signal) => {
             const timestamp = new Date().toISOString();
-            console.log(`🏁 [${timestamp}] PROCESS CLOSE EVENT - Exit code: ${code}`);
+            console.log(`🏁 [${timestamp}] PROCESS CLOSE EVENT - Exit code: ${code}, Signal: ${signal}`);
             console.log(`🏁 [${timestamp}] Current progress: ${testProgress.completed}/${testProgress.total} (${testProgress.passed} passed, ${testProgress.failed} failed)`);
             console.log(`🏁 [${timestamp}] Test status isRunning: ${testStatus.isRunning}`);
+            
+            if (signal) {
+                console.log(`💀 [${timestamp}] Process was killed by signal: ${signal}`);
+            } else if (code === null) {
+                console.log(`💀 [${timestamp}] Process terminated unexpectedly (no exit code)`);
+            } else if (code !== 0) {
+                console.log(`💀 [${timestamp}] Process exited with non-zero code: ${code}`);
+            }
             
             currentTestProcess = null;
             
@@ -1074,6 +1088,14 @@ app.get('/run-tests', async (req, res) => {
                 }, 2000); // Wait 2 seconds for report generation
             } else {
                 console.log(`🏁 [${timestamp}] Tests already marked as not running, skipping completion`);
+            }
+        });
+        
+        child.on('exit', (code, signal) => {
+            const timestamp = new Date().toISOString();
+            console.log(`🚪 [${timestamp}] PROCESS EXIT EVENT - Exit code: ${code}, Signal: ${signal}`);
+            if (signal) {
+                console.log(`⚡ [${timestamp}] Process received termination signal: ${signal}`);
             }
         });
         
