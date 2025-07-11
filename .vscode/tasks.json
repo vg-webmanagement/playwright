@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Start QA Dashboard Server",
+      "type": "shell",
+      "command": "node server.js",
+      "options": {
+        "cwd": "${workspaceFolder}/playwright"
+      },
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new",
+        "showReuseMessage": true,
+        "clear": false
+      },
+      "problemMatcher": [],
+      "runOptions": {
+        "runOn": "folderOpen"
+      }
+    },
+    {
+      "label": "Stop QA Dashboard Server",
+      "type": "shell",
+      "command": "pkill -f 'node server.js'",
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      }
+    },
+    {
+      "label": "Restart QA Dashboard Server",
+      "type": "shell",
+      "command": "pkill -f 'node server.js' && sleep 2 && node server.js",
+      "options": {
+        "cwd": "${workspaceFolder}/playwright"
+      },
+      "group": "build",
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "new"
+      }
+    }
+  ]
+} 
