@@ -125,6 +125,7 @@ playwright/
 - Old test reports are automatically cleaned up before new test runs
 - Real-time progress updates use Server-Sent Events for live feedback
 - Progress tracking shows current test execution, completion counts, and pass/fail statistics
+- Server console displays progress updates for backend monitoring and debugging
 
 ## Troubleshooting
 

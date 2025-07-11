@@ -79,9 +79,11 @@ app.post('/run-crawler', async (req, res) => {
         }
 
         // Run the crawler with environment variables
+        console.log('🕷️ Starting crawler...');
         const crawlerCommand = `ENV=${formData.ENV} DOMAIN=${formData.DOMAIN} node crawler.mjs`;
         
         const { stdout, stderr } = await execAsync(crawlerCommand, { cwd: __dirname });
+        console.log('✅ Crawler completed successfully');
         
         // Redirect to edit-urls after crawler completes
         res.redirect('/edit-urls');
@@ -280,6 +282,23 @@ function broadcastProgress() {
     });
 }
 
+// Function to log progress to server console
+function logProgress() {
+    if (testProgress.stage === 'running') {
+        const percentage = testProgress.total > 0 ? Math.round((testProgress.completed / testProgress.total) * 100) : 0;
+        
+        if (testProgress.currentTest) {
+            console.log(`🔄 [${percentage}%] Running: ${testProgress.currentTest}`);
+        }
+        
+        if (testProgress.total > 0) {
+            console.log(`📊 Progress: ${testProgress.completed}/${testProgress.total} (${testProgress.passed} passed, ${testProgress.failed} failed)`);
+        }
+    } else if (testProgress.stage === 'completed') {
+        console.log(`✅ Tests completed: ${testProgress.completed} total (${testProgress.passed} passed, ${testProgress.failed} failed)`);
+    }
+}
+
 // Function to parse test progress from Playwright output
 function parseTestProgress(output) {
     const lines = output.split('\n');
@@ -328,6 +347,7 @@ function parseTestProgress(output) {
     // Only broadcast once per output chunk if something actually changed
     if (shouldBroadcast) {
         broadcastProgress();
+        logProgress();
     }
 }
 
@@ -396,6 +416,7 @@ app.get('/run-tests', async (req, res) => {
             currentFile: '',
             stage: 'running'
         };
+        console.log('🚀 Starting Playwright tests...');
         broadcastProgress();
         
         // Clean up old report directory to ensure fresh results
@@ -421,6 +442,8 @@ app.get('/run-tests', async (req, res) => {
         // Build the command with environment variables and selected test files
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
         const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html`;
+        
+        console.log('🧪 Executing command:', testCommand);
         
         // Show the initial page immediately
         res.send(`
@@ -732,6 +755,7 @@ app.get('/run-tests', async (req, res) => {
                         // Update progress to completed
                         testProgress.stage = 'completed';
                         broadcastProgress();
+                        logProgress();
                         
                         // Kill the child process since we no longer need it
                         if (currentTestProcess) {
@@ -760,6 +784,7 @@ app.get('/run-tests', async (req, res) => {
                     if (testStatus.isRunning) { // Check again in case it was marked complete elsewhere
                         testStatus.isRunning = false;
                         testStatus.completedTime = new Date().toISOString();
+                        console.log('✅ Test execution completed (fallback detection)');
                     }
                 }, 2000); // Wait 2 seconds for report generation
             }
