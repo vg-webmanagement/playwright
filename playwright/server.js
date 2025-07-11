@@ -395,12 +395,26 @@ function parseTestProgress(output) {
             }
         }
         
-        // Match final summary: "5 failed" (only at start of line) - for logging info only
+        // Match final summary: "5 failed" or "3 passed" (only at start of line)
         const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)\s*$/);
         if (finalMatch) {
-            // Don't set completion here - let the process close event handle it
-            // This prevents premature completion detection
-            shouldBroadcast = true;
+            const count = parseInt(finalMatch[1]);
+            const status = finalMatch[2];
+            
+            // This is the definitive completion signal from Playwright
+            if (status === 'failed') {
+                testProgress.failed = count;
+                testProgress.passed = testProgress.total - count;
+                testProgress.completed = testProgress.total;
+                testProgress.stage = 'completed';
+                shouldBroadcast = true;
+            } else if (status === 'passed') {
+                testProgress.passed = count;
+                testProgress.failed = testProgress.total - count;
+                testProgress.completed = testProgress.total;
+                testProgress.stage = 'completed';
+                shouldBroadcast = true;
+            }
         }
         
         // Detect completion patterns
@@ -1064,11 +1078,12 @@ app.get('/run-tests', async (req, res) => {
                         testStatus.isRunning = false;
                         testStatus.completedTime = new Date().toISOString();
                         
-                        // Set progress stage to completed and broadcast the update
-                        testProgress.stage = 'completed';
-                        // Don't force completion count - use actual completed tests
-                        broadcastProgress();
-                        logProgress();
+                        // Only set completion if not already completed by final summary
+                        if (testProgress.stage !== 'completed') {
+                            testProgress.stage = 'completed';
+                            broadcastProgress();
+                            logProgress();
+                        }
                         
                         console.log('✅ Test execution completed');
                     }
@@ -1082,11 +1097,12 @@ app.get('/run-tests', async (req, res) => {
             testStatus.isRunning = false;
             testStatus.completedTime = new Date().toISOString();
             
-            // Set progress stage to completed and broadcast the update
-            testProgress.stage = 'completed';
-            // Don't force completion count - use actual completed tests
-            broadcastProgress();
-            logProgress();
+            // Only set completion if not already completed by final summary
+            if (testProgress.stage !== 'completed') {
+                testProgress.stage = 'completed';
+                broadcastProgress();
+                logProgress();
+            }
         });
         
     } catch (error) {
