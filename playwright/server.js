@@ -606,19 +606,7 @@ app.get('/run-tests', async (req, res) => {
                         background-color: #e8f5e8;
                         border-radius: 4px;
                     }
-                    .spinner {
-                        border: 4px solid #f3f3f3;
-                        border-top: 4px solid #3498db;
-                        border-radius: 50%;
-                        width: 40px;
-                        height: 40px;
-                        animation: spin 1s linear infinite;
-                        margin: 0 auto 20px;
-                    }
-                    @keyframes spin {
-                        0% { transform: rotate(0deg); }
-                        100% { transform: rotate(360deg); }
-                    }
+
                     .progress-section {
                         margin: 20px 0;
                         padding: 20px;
@@ -728,7 +716,6 @@ app.get('/run-tests', async (req, res) => {
                                             if (reportResponse.ok) {
                                                 document.getElementById('status').className = 'status completed';
                                                 document.getElementById('status').innerHTML = '✅ <strong>Tests Completed Successfully!</strong><br>Results are ready to view.';
-                                                document.getElementById('spinner').style.display = 'none';
                                                 document.getElementById('reportBtn').style.display = 'inline-block';
                                                 testCompleted = true;
                                                 
@@ -778,8 +765,6 @@ app.get('/run-tests', async (req, res) => {
                             }).join('')}
                         </ul>
                     </div>
-                    
-                    <div id="spinner" class="spinner"></div>
                     
                     <div id="status" class="status running">
                         🔄 <strong>Tests are running...</strong><br>
