@@ -34,7 +34,8 @@ let testProgress = {
     failed: 0,
     passed: 0,
     currentFile: '',
-    stage: 'idle' // 'running', 'completed'
+    stage: 'idle', // 'running', 'completed'
+    completedTests: new Set() // Track which tests have been counted
 };
 
 // Store SSE connections for real-time updates
@@ -257,8 +258,17 @@ app.get('/progress', (req, res) => {
         'Access-Control-Allow-Origin': '*'
     });
 
-    // Send initial progress state
-    res.write(`data: ${JSON.stringify(testProgress)}\n\n`);
+    // Send initial progress state (excluding the Set)
+    const initialData = {
+        currentTest: testProgress.currentTest,
+        completed: testProgress.completed,
+        total: testProgress.total,
+        failed: testProgress.failed,
+        passed: testProgress.passed,
+        currentFile: testProgress.currentFile,
+        stage: testProgress.stage
+    };
+    res.write(`data: ${JSON.stringify(initialData)}\n\n`);
 
     // Add this client to the list
     sseClients.push(res);
@@ -271,7 +281,18 @@ app.get('/progress', (req, res) => {
 
 // Function to broadcast progress updates
 function broadcastProgress() {
-    const data = `data: ${JSON.stringify(testProgress)}\n\n`;
+    // Create a clean copy without the Set (which can't be serialized)
+    const progressData = {
+        currentTest: testProgress.currentTest,
+        completed: testProgress.completed,
+        total: testProgress.total,
+        failed: testProgress.failed,
+        passed: testProgress.passed,
+        currentFile: testProgress.currentFile,
+        stage: testProgress.stage
+    };
+    
+    const data = `data: ${JSON.stringify(progressData)}\n\n`;
     sseClients.forEach(client => {
         try {
             client.write(data);
@@ -320,76 +341,71 @@ function logProgress() {
 
 // Function to parse test progress from Playwright output
 function parseTestProgress(output) {
-    const lines = output.split('\n');
+    const lines = output.split('\n').filter(line => line.trim()); // Remove empty lines
     let shouldBroadcast = false;
     
     lines.forEach(line => {
+        // Skip lines that look like partial/corrupted output
+        if (line.includes('139 |') || line.includes('console.log') || line.length < 10) {
+            return;
+        }
+        
         // Match "Running X tests using Y workers"
-        const runningMatch = line.match(/Running\s+(\d+)\s+tests?\s+using/);
+        const runningMatch = line.match(/^Running\s+(\d+)\s+tests?\s+using/);
         if (runningMatch) {
             const newTotal = parseInt(runningMatch[1]);
             if (testProgress.total !== newTotal) {
                 testProgress.total = newTotal;
+                // Reset completed tests tracking for new run
+                testProgress.completedTests.clear();
                 shouldBroadcast = true;
             }
         }
         
         // Match current test: [chromium] › tests/pixel.test.mjs:79:5 › Test Name
-        const testMatch = line.match(/\[chromium\]\s*›.*?›\s*(.+?)(?:\s*─|$)/);
+        const testMatch = line.match(/^\[chromium\]\s*›.*?›\s*(.+?)(?:\s*─|$)/);
         if (testMatch) {
             const newTest = testMatch[1].trim();
-            if (testProgress.currentTest !== newTest) {
+            if (testProgress.currentTest !== newTest && !newTest.includes('ended')) {
                 testProgress.currentTest = newTest;
                 shouldBroadcast = true;
             }
         }
         
         // Match test completion: "Pixel Comparison for -blog ended - PASSED/FAILED/ERROR"
-        // Also matches: "Text Content Comparison for X ended - STATUS" and "Title & Meta Tag Tests for X ended - STATUS"
-        const endedMatch = line.match(/(.+) ended - (PASSED|FAILED|ERROR)(\s*\([^)]+\))?/);
+        const endedMatch = line.match(/^\s*(.+?) ended - (PASSED|FAILED|ERROR)(\s*\([^)]+\))?\s*$/);
         if (endedMatch) {
-            const testName = endedMatch[1];
+            const testName = endedMatch[1].trim();
             const result = endedMatch[2];
             const note = endedMatch[3] || '';
-            testProgress.currentTest = `${testName} ended - ${result}${note}`;
             
-            // Update counters based on result
-            if (result === 'PASSED') {
-                testProgress.passed++;
-            } else if (result === 'FAILED' || result === 'ERROR') {
-                testProgress.failed++;
+            // Only count each test once
+            if (!testProgress.completedTests.has(testName)) {
+                testProgress.completedTests.add(testName);
+                testProgress.currentTest = `${testName} ended - ${result}${note}`;
+                
+                // Update counters based on result
+                if (result === 'PASSED') {
+                    testProgress.passed++;
+                } else if (result === 'FAILED' || result === 'ERROR') {
+                    testProgress.failed++;
+                }
+                testProgress.completed = testProgress.passed + testProgress.failed;
+                shouldBroadcast = true;
             }
-            testProgress.completed = testProgress.passed + testProgress.failed;
-            shouldBroadcast = true;
         }
         
-        // Match final summary: "5 failed" or "3 passed, 2 failed"
-        const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)$/);
+        // Match final summary: "5 failed" (only at start of line)
+        const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)\s*$/);
         if (finalMatch) {
             const count = parseInt(finalMatch[1]);
             const status = finalMatch[2];
             
-            if (status === 'failed' && testProgress.failed !== count) {
+            // Only update if this is the final authoritative count
+            if (status === 'failed' && testProgress.completed >= testProgress.total) {
                 testProgress.failed = count;
-                testProgress.completed = count; // All tests completed if we see final summary
-                shouldBroadcast = true;
-            } else if (status === 'passed' && testProgress.passed !== count) {
-                testProgress.passed = count;
-                testProgress.completed = count; // All tests completed if we see final summary
-                shouldBroadcast = true;
-            }
-        }
-        
-        // Match mixed summary: "2 passed, 3 failed"
-        const mixedMatch = line.match(/(\d+)\s+passed,\s*(\d+)\s+failed/);
-        if (mixedMatch) {
-            const passed = parseInt(mixedMatch[1]);
-            const failed = parseInt(mixedMatch[2]);
-            
-            if (testProgress.passed !== passed || testProgress.failed !== failed) {
-                testProgress.passed = passed;
-                testProgress.failed = failed;
-                testProgress.completed = passed + failed;
+                testProgress.passed = testProgress.total - count;
+                testProgress.completed = testProgress.total;
                 shouldBroadcast = true;
             }
         }
@@ -416,7 +432,8 @@ app.post('/reset-test-status', (req, res) => {
         failed: 0,
         passed: 0,
         currentFile: '',
-        stage: 'idle'
+        stage: 'idle',
+        completedTests: new Set()
     };
     
     // Reset logged state
@@ -469,7 +486,8 @@ app.get('/run-tests', async (req, res) => {
             failed: 0,
             passed: 0,
             currentFile: '',
-            stage: 'running'
+            stage: 'running',
+            completedTests: new Set()
         };
         
         // Reset logged state for new test run
