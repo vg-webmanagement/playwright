@@ -23,6 +23,9 @@ let testStatus = {
     completedTime: null
 };
 
+// Track the current test process
+let currentTestProcess = null;
+
 // Serve static files from playwright-report directory
 app.use('/playwright-report', express.static(path.join(__dirname, 'playwright-report')));
 
@@ -239,6 +242,24 @@ app.post('/save-urls', (req, res) => {
 app.get('/test-status', (req, res) => {
     console.log('Test status requested:', testStatus);
     res.json(testStatus);
+});
+
+// Route 5.1: Reset test status (for debugging)
+app.post('/reset-test-status', (req, res) => {
+    console.log('Resetting test status');
+    testStatus.isRunning = false;
+    testStatus.startTime = null;
+    testStatus.completedTime = null;
+    if (currentTestProcess) {
+        try {
+            currentTestProcess.kill('SIGTERM');
+            console.log('Killed running test process');
+        } catch (error) {
+            console.log('Error killing test process:', error.message);
+        }
+        currentTestProcess = null;
+    }
+    res.json({ success: true, message: 'Test status reset' });
 });
 
 // Route 6: Run Playwright tests
@@ -482,9 +503,39 @@ app.get('/run-tests', async (req, res) => {
         
         // Execute the command in the background
         const child = exec(testCommand, { cwd: __dirname });
+        currentTestProcess = child;
         
         child.stdout.on('data', (data) => {
-            console.log('Test stdout:', data.toString());
+            const output = data.toString();
+            console.log('Test stdout:', output);
+            
+            // Check if this indicates test completion
+            if (output.includes('Serving HTML report at') || 
+                output.includes('failed') || 
+                output.includes('passed') || 
+                output.match(/\d+ (passed|failed)/)) {
+                
+                                // Tests are likely complete, check for report file
+                setTimeout(() => {
+                    const reportFile = path.join(__dirname, 'playwright-report', 'index.html');
+                    if (fs.existsSync(reportFile) && testStatus.isRunning) {
+                        console.log('Test completion detected via stdout, marking as complete');
+                        testStatus.isRunning = false;
+                        testStatus.completedTime = new Date().toISOString();
+                        console.log('Test status updated to completed at:', testStatus.completedTime);
+                        
+                        // Kill the child process since we no longer need it
+                        if (currentTestProcess) {
+                            try {
+                                currentTestProcess.kill('SIGTERM');
+                                console.log('Child process terminated');
+                            } catch (error) {
+                                console.log('Error terminating child process:', error.message);
+                            }
+                        }
+                    }
+                }, 3000); // Wait 3 seconds for report to be fully written
+            }
         });
         
         child.stderr.on('data', (data) => {
@@ -493,36 +544,43 @@ app.get('/run-tests', async (req, res) => {
         
         child.on('close', (code) => {
             console.log(`Test execution completed with exit code: ${code}`);
+            currentTestProcess = null;
             
-            // Wait a moment for report files to be written, then mark as completed
-            setTimeout(() => {
-                testStatus.isRunning = false;
-                testStatus.completedTime = new Date().toISOString();
-                console.log('Test status updated to completed at:', testStatus.completedTime);
-                
-                // Check if report file exists
-                const reportDir = path.join(__dirname, 'playwright-report');
-                const reportFile = path.join(reportDir, 'index.html');
-                
-                console.log('Checking for report directory at:', reportDir);
-                if (fs.existsSync(reportDir)) {
-                    console.log('Report directory exists');
-                    const files = fs.readdirSync(reportDir);
-                    console.log('Files in report directory:', files);
-                    
-                    if (fs.existsSync(reportFile)) {
-                        console.log('Report file confirmed to exist at:', reportFile);
-                    } else {
-                        console.log('Report file not found at:', reportFile);
+            // Only update status if not already marked as completed
+            if (testStatus.isRunning) {
+                // Wait a moment for report files to be written, then mark as completed
+                setTimeout(() => {
+                    if (testStatus.isRunning) { // Check again in case it was marked complete elsewhere
+                        testStatus.isRunning = false;
+                        testStatus.completedTime = new Date().toISOString();
+                        console.log('Test status updated to completed at:', testStatus.completedTime);
+                        
+                        // Check if report file exists
+                        const reportDir = path.join(__dirname, 'playwright-report');
+                        const reportFile = path.join(reportDir, 'index.html');
+                        
+                        console.log('Checking for report directory at:', reportDir);
+                        if (fs.existsSync(reportDir)) {
+                            console.log('Report directory exists');
+                            const files = fs.readdirSync(reportDir);
+                            console.log('Files in report directory:', files);
+                            
+                            if (fs.existsSync(reportFile)) {
+                                console.log('Report file confirmed to exist at:', reportFile);
+                            } else {
+                                console.log('Report file not found at:', reportFile);
+                            }
+                        } else {
+                            console.log('Report directory does not exist');
+                        }
                     }
-                } else {
-                    console.log('Report directory does not exist');
-                }
-            }, 2000); // Wait 2 seconds for report generation
+                }, 2000); // Wait 2 seconds for report generation
+            }
         });
         
         child.on('error', (error) => {
             console.error('Test execution error:', error);
+            currentTestProcess = null;
             // Mark test as completed (with error)
             testStatus.isRunning = false;
             testStatus.completedTime = new Date().toISOString();
