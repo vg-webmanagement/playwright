@@ -98,6 +98,7 @@ playwright/
 - `GET /edit-urls` - URL editing interface
 - `POST /save-urls` - Save edited URLs
 - `GET /run-tests` - Execute Playwright tests
+- `GET /test-status` - Check test execution status (JSON)
 - `GET /playwright-report/*` - Static test reports
 
 ## Dependencies
@@ -114,6 +115,8 @@ playwright/
 - Form data is stored in memory (session-based)
 - All file operations are performed locally
 - Test reports are automatically generated and served
+- Test execution status is tracked server-side to prevent showing stale results
+- Old test reports are automatically cleaned up before new test runs
 
 ## Troubleshooting
 
