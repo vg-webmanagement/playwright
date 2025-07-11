@@ -1044,6 +1044,18 @@ app.get('/run-tests', async (req, res) => {
             // Log key events for debugging
             if (output.includes('Serving HTML report at')) {
                 console.log(`🎯 [${timestamp}] DETECTED: Serving HTML report`);
+                
+                // Mark tests as complete when report is being served
+                if (testStatus.isRunning) {
+                    console.log(`✅ [${timestamp}] Tests completed - Report is ready`);
+                    testStatus.isRunning = false;
+                    testStatus.completedTime = timestamp;
+                    
+                    // Set completion stage and broadcast
+                    testProgress.stage = 'completed';
+                    broadcastProgress();
+                    logProgress();
+                }
             }
             
             if (output.match(/^\s*\d+\s+(passed|failed)\s*$/)) {
@@ -1079,28 +1091,19 @@ app.get('/run-tests', async (req, res) => {
             
             // Only update status if not already marked as completed
             if (testStatus.isRunning) {
-                console.log(`🏁 [${timestamp}] Setting completion in 2 seconds...`);
-                // Wait a moment for report files to be written, then mark as completed
-                setTimeout(() => {
-                    const completionTimestamp = new Date().toISOString();
-                    if (testStatus.isRunning) { // Check again in case it was marked complete elsewhere
-                        console.log(`🏁 [${completionTimestamp}] SETTING COMPLETION - Final counts: ${testProgress.completed}/${testProgress.total}`);
-                        
-                        testStatus.isRunning = false;
-                        testStatus.completedTime = completionTimestamp;
-                        
-                        // Set completion when process closes - this is the definitive signal
-                        testProgress.stage = 'completed';
-                        broadcastProgress();
-                        logProgress();
-                        
-                        console.log(`✅ [${completionTimestamp}] Test execution completed`);
-                    } else {
-                        console.log(`🏁 [${completionTimestamp}] Already marked complete, skipping`);
-                    }
-                }, 2000); // Wait 2 seconds for report generation
+                console.log(`🏁 [${timestamp}] Process closed but tests still marked as running - completing now`);
+                
+                testStatus.isRunning = false;
+                testStatus.completedTime = timestamp;
+                
+                // Set completion when process closes
+                testProgress.stage = 'completed';
+                broadcastProgress();
+                logProgress();
+                
+                console.log(`✅ [${timestamp}] Test execution completed via process close`);
             } else {
-                console.log(`🏁 [${timestamp}] Tests already marked as not running, skipping completion`);
+                console.log(`🏁 [${timestamp}] Tests already completed, process closed cleanly`);
             }
         });
         
