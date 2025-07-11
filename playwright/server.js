@@ -395,33 +395,19 @@ function parseTestProgress(output) {
             }
         }
         
-        // Match final summary: "5 failed" (only at start of line)
+        // Match final summary: "5 failed" (only at start of line) - for logging info only
         const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)\s*$/);
         if (finalMatch) {
-            const count = parseInt(finalMatch[1]);
-            const status = finalMatch[2];
-            
-            // Update final counts when we see the summary
-            if (status === 'failed') {
-                testProgress.failed = count;
-                testProgress.passed = Math.max(0, testProgress.total - count);
-                testProgress.completed = testProgress.total;
-                shouldBroadcast = true;
-            } else if (status === 'passed') {
-                testProgress.passed = count;
-                testProgress.failed = Math.max(0, testProgress.total - count);
-                testProgress.completed = testProgress.total;
-                shouldBroadcast = true;
-            }
+            // Don't set completion here - let the process close event handle it
+            // This prevents premature completion detection
+            shouldBroadcast = true;
         }
         
         // Detect completion patterns
         if (line.includes('Serving HTML report at')) {
-            // Tests are definitely complete
-            if (testProgress.completed < testProgress.total) {
-                testProgress.completed = testProgress.total;
-                shouldBroadcast = true;
-            }
+            // Tests are definitely complete, but don't force completion count
+            // The process will handle final completion when it closes
+            shouldBroadcast = true;
         }
     });
     
@@ -1080,10 +1066,7 @@ app.get('/run-tests', async (req, res) => {
                         
                         // Set progress stage to completed and broadcast the update
                         testProgress.stage = 'completed';
-                        // Ensure completed count matches total if not already set
-                        if (testProgress.completed < testProgress.total && testProgress.total > 0) {
-                            testProgress.completed = testProgress.total;
-                        }
+                        // Don't force completion count - use actual completed tests
                         broadcastProgress();
                         logProgress();
                         
@@ -1101,10 +1084,7 @@ app.get('/run-tests', async (req, res) => {
             
             // Set progress stage to completed and broadcast the update
             testProgress.stage = 'completed';
-            // Ensure completed count matches total if not already set
-            if (testProgress.completed < testProgress.total && testProgress.total > 0) {
-                testProgress.completed = testProgress.total;
-            }
+            // Don't force completion count - use actual completed tests
             broadcastProgress();
             logProgress();
         });
