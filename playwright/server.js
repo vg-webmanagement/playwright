@@ -339,7 +339,7 @@ function logProgress() {
     }
 }
 
-// Function to parse test progress from Playwright output (with output filtering)
+// Function to parse test progress from Playwright output
 function parseTestProgress(output) {
     const lines = output.split('\n').filter(line => line.trim()); // Remove empty lines
     let shouldBroadcast = false;
@@ -402,23 +402,13 @@ function parseTestProgress(output) {
                     testProgress.failed++;
                 }
                 testProgress.completed = testProgress.passed + testProgress.failed;
-                
-                const timestamp = new Date().toISOString();
-                console.log(`✅ [${timestamp}] INDIVIDUAL TEST COMPLETE: ${testName} - ${result} (Progress: ${testProgress.completed}/${testProgress.total})`);
-                
                 shouldBroadcast = true;
             }
         }
         
-        // Match final summary: "5 failed" or "3 passed" (only for logging, not completion)
+        // Match final summary: "5 failed" or "3 passed" (for progress tracking only)
         const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)\s*$/);
         if (finalMatch) {
-            const count = parseInt(finalMatch[1]);
-            const status = finalMatch[2];
-            const timestamp = new Date().toISOString();
-            console.log(`📊 [${timestamp}] FINAL SUMMARY DETECTED: ${count} ${status} (Current progress: ${testProgress.completed}/${testProgress.total})`);
-            
-            // Just log this, don't trigger completion - let process close handle that
             shouldBroadcast = true;
         }
         
@@ -649,7 +639,7 @@ app.get('/run-tests', async (req, res) => {
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
         const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8`;
         
-        console.log('🧪 Executing command:', testCommand);
+
         
         // Show the initial page immediately
         res.send(`
@@ -865,36 +855,30 @@ app.get('/run-tests', async (req, res) => {
                     }
                     
                     function updateTestResults() {
-                        console.log('Updating test results...');
                         fetch('/test-results-files')
                             .then(response => response.json())
                             .then(data => {
-                                console.log('Test results data:', data);
                                 const resultsSection = document.getElementById('resultsSection');
                                 const passedUrlsColumn = document.getElementById('passedUrlsColumn');
                                 const noMetaUrlsColumn = document.getElementById('noMetaUrlsColumn');
                                 const passedUrlsDiv = document.getElementById('passedUrls');
                                 const noMetaUrlsDiv = document.getElementById('noMetaUrls');
                                 
-                                // Check if all required elements exist
                                 if (!resultsSection || !passedUrlsColumn || !noMetaUrlsColumn || !passedUrlsDiv || !noMetaUrlsDiv) {
-                                    console.error('Some required DOM elements are missing');
                                     return;
                                 }
                                 
                                 let hasResults = false;
                                 
-                                // Display passed URLs only if they exist
+                                // Display processed URLs only if they exist
                                 if (data.passedUrls && data.passedUrls.length > 0) {
                                     passedUrlsDiv.innerHTML = data.passedUrls
                                         .map(url => \`<div class="url-item">\${url}</div>\`)
                                         .join('');
                                     passedUrlsColumn.style.display = 'block';
                                     hasResults = true;
-                                    console.log('Showing passed URLs:', data.passedUrls.length);
                                 } else {
                                     passedUrlsColumn.style.display = 'none';
-                                    console.log('No passed URLs to display');
                                 }
                                 
                                 // Display no meta URLs only if they exist
@@ -904,19 +888,15 @@ app.get('/run-tests', async (req, res) => {
                                         .join('');
                                     noMetaUrlsColumn.style.display = 'block';
                                     hasResults = true;
-                                    console.log('Showing no meta URLs:', data.noMetaUrls.length);
                                 } else {
                                     noMetaUrlsColumn.style.display = 'none';
-                                    console.log('No meta URLs to display');
                                 }
                                 
                                 // Only show results section if there are results to display
                                 if (hasResults) {
                                     resultsSection.style.display = 'block';
-                                    console.log('Results section shown');
                                 } else {
                                     resultsSection.style.display = 'none';
-                                    console.log('Results section hidden - no results to display');
                                 }
                             })
                             .catch(error => {
@@ -1006,7 +986,7 @@ app.get('/run-tests', async (req, res) => {
                         <h4>Test Results Summary</h4>
                         <div class="results-grid">
                             <div id="passedUrlsColumn" class="result-column">
-                                <h5>✅ Passed URLs</h5>
+                                <h5>✅ Processed URLs</h5>
                                 <div id="passedUrls" class="url-list"></div>
                             </div>
                             <div id="noMetaUrlsColumn" class="result-column">
@@ -1035,101 +1015,57 @@ app.get('/run-tests', async (req, res) => {
         });
         currentTestProcess = child;
         
-        console.log(`🚀 [${new Date().toISOString()}] Process started with PID: ${child.pid}`);
+        console.log('🚀 Starting test execution...');
         
                 child.stdout.on('data', (data) => {
             const output = data.toString();
-            const timestamp = new Date().toISOString();
             
-            // Log key events for debugging
+            // Check for test completion
             if (output.includes('Serving HTML report at')) {
-                console.log(`🎯 [${timestamp}] DETECTED: Serving HTML report`);
-                
-                // Mark tests as complete when report is being served
                 if (testStatus.isRunning) {
-                    console.log(`✅ [${timestamp}] Tests completed - Report is ready`);
+                    console.log('✅ Tests completed - Report is ready');
                     testStatus.isRunning = false;
-                    testStatus.completedTime = timestamp;
+                    testStatus.completedTime = new Date().toISOString();
                     
-                    // Set completion stage and broadcast
                     testProgress.stage = 'completed';
                     broadcastProgress();
                     logProgress();
                 }
             }
             
-            if (output.match(/^\s*\d+\s+(passed|failed)\s*$/)) {
-                console.log(`🎯 [${timestamp}] DETECTED: Final summary line in output`);
-            }
-            
-            // Parse test progress from output (suppress raw output display)
+            // Parse test progress 
             parseTestProgress(output);
-            
-            // Don't display the raw output - only our custom progress messages will show
         });
         
         child.stderr.on('data', (data) => {
-            const timestamp = new Date().toISOString();
-            console.log(`🚨 [${timestamp}] STDERR: ${data.toString().trim()}`);
+            // Log errors if they occur
+            console.log('⚠️ Test process error:', data.toString().trim());
         });
         
         child.on('close', (code, signal) => {
-            const timestamp = new Date().toISOString();
-            console.log(`🏁 [${timestamp}] PROCESS CLOSE EVENT - Exit code: ${code}, Signal: ${signal}`);
-            console.log(`🏁 [${timestamp}] Current progress: ${testProgress.completed}/${testProgress.total} (${testProgress.passed} passed, ${testProgress.failed} failed)`);
-            console.log(`🏁 [${timestamp}] Test status isRunning: ${testStatus.isRunning}`);
-            
-            if (signal) {
-                console.log(`💀 [${timestamp}] Process was killed by signal: ${signal}`);
-            } else if (code === null) {
-                console.log(`💀 [${timestamp}] Process terminated unexpectedly (no exit code)`);
-            } else if (code !== 0) {
-                console.log(`💀 [${timestamp}] Process exited with non-zero code: ${code}`);
-            }
-            
             currentTestProcess = null;
             
-            // Only update status if not already marked as completed
             if (testStatus.isRunning) {
-                console.log(`🏁 [${timestamp}] Process closed but tests still marked as running - completing now`);
-                
+                console.log('🏁 Test process ended, marking as complete');
                 testStatus.isRunning = false;
-                testStatus.completedTime = timestamp;
+                testStatus.completedTime = new Date().toISOString();
                 
-                // Set completion when process closes
                 testProgress.stage = 'completed';
                 broadcastProgress();
                 logProgress();
-                
-                console.log(`✅ [${timestamp}] Test execution completed via process close`);
-            } else {
-                console.log(`🏁 [${timestamp}] Tests already completed, process closed cleanly`);
-            }
-        });
-        
-        child.on('exit', (code, signal) => {
-            const timestamp = new Date().toISOString();
-            console.log(`🚪 [${timestamp}] PROCESS EXIT EVENT - Exit code: ${code}, Signal: ${signal}`);
-            if (signal) {
-                console.log(`⚡ [${timestamp}] Process received termination signal: ${signal}`);
             }
         });
         
         child.on('error', (error) => {
-            const timestamp = new Date().toISOString();
-            console.log(`💥 [${timestamp}] PROCESS ERROR EVENT: ${error.message}`);
+            console.log('💥 Test process error:', error.message);
             
             currentTestProcess = null;
-            // Mark test as completed (with error)
             testStatus.isRunning = false;
-            testStatus.completedTime = timestamp;
+            testStatus.completedTime = new Date().toISOString();
             
-            // Set completion when process errors - this is the definitive signal  
             testProgress.stage = 'completed';
             broadcastProgress();
             logProgress();
-            
-            console.log(`💥 [${timestamp}] Marked complete due to error`);
         });
         
     } catch (error) {
