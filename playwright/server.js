@@ -452,6 +452,66 @@ app.post('/reset-test-status', (req, res) => {
     res.json({ success: true, message: 'Test status reset' });
 });
 
+// Route 5.3: Get test results files
+app.get('/test-results-files', (req, res) => {
+    const passedUrlsPath = path.join(__dirname, 'tests', 'urls-passed.json');
+    const noMetaPath = path.join(__dirname, 'tests', 'nometa.json');
+    
+    let passedUrls = [];
+    let noMetaUrls = [];
+    
+    try {
+        if (fs.existsSync(passedUrlsPath)) {
+            passedUrls = JSON.parse(fs.readFileSync(passedUrlsPath, 'utf8'));
+        }
+    } catch (error) {
+        // Handle error silently, keep empty array
+    }
+    
+    try {
+        if (fs.existsSync(noMetaPath)) {
+            noMetaUrls = JSON.parse(fs.readFileSync(noMetaPath, 'utf8'));
+        }
+    } catch (error) {
+        // Handle error silently, keep empty array
+    }
+    
+    res.json({
+        passedUrls: passedUrls,
+        noMetaUrls: noMetaUrls
+    });
+});
+
+// Route 5.4: Clean up report folders manually
+app.post('/cleanup-reports', (req, res) => {
+    const foldersToClean = [
+        { name: 'playwright-report', path: path.join(__dirname, 'playwright-report') },
+        { name: 'test-results', path: path.join(__dirname, 'test-results') },
+        { name: 'screenshots', path: path.join(__dirname, 'screenshots') }
+    ];
+    
+    const cleanupResults = [];
+    
+    foldersToClean.forEach(folder => {
+        try {
+            if (fs.existsSync(folder.path)) {
+                fs.rmSync(folder.path, { recursive: true, force: true });
+                cleanupResults.push({ folder: folder.name, status: 'cleaned' });
+            } else {
+                cleanupResults.push({ folder: folder.name, status: 'not found' });
+            }
+        } catch (error) {
+            cleanupResults.push({ folder: folder.name, status: 'error', error: error.message });
+        }
+    });
+    
+    res.json({ 
+        success: true, 
+        message: 'Manual cleanup completed', 
+        results: cleanupResults 
+    });
+});
+
 // Route 6: Run Playwright tests
 app.get('/run-tests', async (req, res) => {
     try {
@@ -511,6 +571,16 @@ app.get('/run-tests', async (req, res) => {
         if (fs.existsSync(testResultsDir)) {
             try {
                 fs.rmSync(testResultsDir, { recursive: true, force: true });
+            } catch (error) {
+                // Silent error handling
+            }
+        }
+        
+        // Clean up screenshots folder to prevent accumulation
+        const screenshotsDir = path.join(__dirname, 'screenshots');
+        if (fs.existsSync(screenshotsDir)) {
+            try {
+                fs.rmSync(screenshotsDir, { recursive: true, force: true });
             } catch (error) {
                 // Silent error handling
             }
@@ -646,6 +716,36 @@ app.get('/run-tests', async (req, res) => {
                         margin: 10px 0;
                         border-left: 4px solid #007bff;
                     }
+                    .results-grid {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 20px;
+                        margin-top: 15px;
+                    }
+                    .result-column {
+                        background-color: #f8f9fa;
+                        padding: 15px;
+                        border-radius: 4px;
+                        border: 1px solid #dee2e6;
+                    }
+                    .result-column h5 {
+                        margin: 0 0 10px 0;
+                        color: #495057;
+                    }
+                    .url-list {
+                        font-family: monospace;
+                        font-size: 13px;
+                        line-height: 1.4;
+                        max-height: 200px;
+                        overflow-y: auto;
+                    }
+                    .url-item {
+                        padding: 4px 8px;
+                        margin: 2px 0;
+                        background-color: white;
+                        border-radius: 2px;
+                        border: 1px solid #e9ecef;
+                    }
                 </style>
                 <script>
                     let testCompleted = false;
@@ -699,7 +799,43 @@ app.get('/run-tests', async (req, res) => {
                                 \`Completed: \${progress.completed} tests (\${progress.passed} passed, \${progress.failed} failed)\`;
                             
                             currentTestDiv.innerHTML = '<strong>All tests completed!</strong>';
+                            
+                            // Show results section when tests complete
+                            updateTestResults();
                         }
+                    }
+                    
+                    function updateTestResults() {
+                        fetch('/test-results-files')
+                            .then(response => response.json())
+                            .then(data => {
+                                const resultsSection = document.getElementById('resultsSection');
+                                const passedUrlsDiv = document.getElementById('passedUrls');
+                                const noMetaUrlsDiv = document.getElementById('noMetaUrls');
+                                
+                                // Display passed URLs
+                                if (data.passedUrls && data.passedUrls.length > 0) {
+                                    passedUrlsDiv.innerHTML = data.passedUrls
+                                        .map(url => \`<div class="url-item">\${url}</div>\`)
+                                        .join('');
+                                } else {
+                                    passedUrlsDiv.innerHTML = '<div style="color: #6c757d; font-style: italic;">No URLs passed</div>';
+                                }
+                                
+                                // Display no meta URLs
+                                if (data.noMetaUrls && data.noMetaUrls.length > 0) {
+                                    noMetaUrlsDiv.innerHTML = data.noMetaUrls
+                                        .map(url => \`<div class="url-item">\${url}</div>\`)
+                                        .join('');
+                                } else {
+                                    noMetaUrlsDiv.innerHTML = '<div style="color: #6c757d; font-style: italic;">No missing meta/title issues</div>';
+                                }
+                                
+                                resultsSection.style.display = 'block';
+                            })
+                            .catch(error => {
+                                console.error('Error fetching test results:', error);
+                            });
                     }
                     
                     function checkTestStatus() {
@@ -778,6 +914,20 @@ app.get('/run-tests', async (req, res) => {
                         </div>
                         <div id="progressText" class="progress-text">Initializing tests...</div>
                         <div id="currentTest" class="current-test" style="display: none;"></div>
+                    </div>
+                    
+                    <div id="resultsSection" class="progress-section" style="display: none;">
+                        <h4>Test Results Summary</h4>
+                        <div class="results-grid">
+                            <div class="result-column">
+                                <h5>✅ Passed URLs</h5>
+                                <div id="passedUrls" class="url-list"></div>
+                            </div>
+                            <div class="result-column">
+                                <h5>⚠️ Missing Meta/Title</h5>
+                                <div id="noMetaUrls" class="url-list"></div>
+                            </div>
+                        </div>
                     </div>
                     
                     <div class="links">

@@ -10,6 +10,7 @@ A comprehensive web-based quality assurance dashboard for automated testing usin
 - **Playwright Test Execution**: Run automated tests with real-time output display
 - **HTML Test Reports**: View detailed test results through integrated reporting
 - **Real-time Progress Tracking**: Monitor test execution with live progress bars and status updates
+- **Test Results Summary**: View passed URLs and missing meta/title issues after test completion
 
 ## Installation
 
@@ -70,6 +71,9 @@ Fill out the form with the following information:
   - Test completion status (PASSED/FAILED/ERROR)
   - Number of tests completed/total
   - Pass/fail counts
+- View test results summary showing:
+  - URLs that passed all tests
+  - URLs with missing meta/title tags
 - Access detailed HTML reports
 
 ### 5. View Results
@@ -105,7 +109,9 @@ playwright/
 - `GET /run-tests` - Execute Playwright tests
 - `GET /test-status` - Check test execution status (JSON)
 - `GET /progress` - Real-time test progress updates (Server-Sent Events)
+- `GET /test-results-files` - Get passed URLs and missing meta URLs (JSON)
 - `POST /reset-test-status` - Reset test status (for debugging)
+- `POST /cleanup-reports` - Clean up all report and screenshot folders
 - `GET /playwright-report/*` - Static test reports
 
 ## Dependencies
@@ -123,7 +129,7 @@ playwright/
 - All file operations are performed locally
 - Test reports are automatically generated and served
 - Test execution status is tracked server-side to prevent showing stale results
-- Old test reports are automatically cleaned up before new test runs
+- Old test reports and screenshots are automatically cleaned up before new test runs
 - Real-time progress updates use Server-Sent Events for live feedback
 - Progress tracking shows current test execution, completion counts, and pass/fail statistics
 - Server console displays progress updates for backend monitoring and debugging
