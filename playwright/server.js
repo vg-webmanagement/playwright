@@ -282,20 +282,39 @@ function broadcastProgress() {
     });
 }
 
+// Track last logged state to avoid duplicates
+let lastLoggedState = {
+    currentTest: '',
+    completed: -1,
+    passed: -1,
+    failed: -1
+};
+
 // Function to log progress to server console
 function logProgress() {
     if (testProgress.stage === 'running') {
         const percentage = testProgress.total > 0 ? Math.round((testProgress.completed / testProgress.total) * 100) : 0;
         
-        if (testProgress.currentTest) {
+        // Only log current test if it changed
+        if (testProgress.currentTest && testProgress.currentTest !== lastLoggedState.currentTest) {
             console.log(`🔄 [${percentage}%] Running: ${testProgress.currentTest}`);
+            lastLoggedState.currentTest = testProgress.currentTest;
         }
         
-        if (testProgress.total > 0) {
+        // Only log progress stats if numbers changed
+        if (testProgress.total > 0 && 
+            (testProgress.completed !== lastLoggedState.completed || 
+             testProgress.passed !== lastLoggedState.passed || 
+             testProgress.failed !== lastLoggedState.failed)) {
             console.log(`📊 Progress: ${testProgress.completed}/${testProgress.total} (${testProgress.passed} passed, ${testProgress.failed} failed)`);
+            lastLoggedState.completed = testProgress.completed;
+            lastLoggedState.passed = testProgress.passed;
+            lastLoggedState.failed = testProgress.failed;
         }
     } else if (testProgress.stage === 'completed') {
         console.log(`✅ Tests completed: ${testProgress.completed} total (${testProgress.passed} passed, ${testProgress.failed} failed)`);
+        // Reset for next run
+        lastLoggedState = { currentTest: '', completed: -1, passed: -1, failed: -1 };
     }
 }
 
@@ -305,40 +324,53 @@ function parseTestProgress(output) {
     let shouldBroadcast = false;
     
     lines.forEach(line => {
-        // Match running test pattern: [chromium] › tests/pixel.test.mjs:79:5 › Test Name
-        const runningMatch = line.match(/\[chromium\]\s*›\s*tests\/([^:]+).*?›\s*(.+?)(?:\s*───|$)/);
+        // Match "Running X tests using Y workers"
+        const runningMatch = line.match(/Running\s+(\d+)\s+tests?\s+using/);
         if (runningMatch) {
-            const newTest = runningMatch[2].trim();
+            const newTotal = parseInt(runningMatch[1]);
+            if (testProgress.total !== newTotal) {
+                testProgress.total = newTotal;
+                shouldBroadcast = true;
+            }
+        }
+        
+        // Match current test: [chromium] › tests/pixel.test.mjs:79:5 › Test Name
+        const testMatch = line.match(/\[chromium\]\s*›.*?›\s*(.+?)(?:\s*─|$)/);
+        if (testMatch) {
+            const newTest = testMatch[1].trim();
             if (testProgress.currentTest !== newTest) {
-                testProgress.currentFile = runningMatch[1];
                 testProgress.currentTest = newTest;
                 shouldBroadcast = true;
             }
         }
         
-        // Match completion summary: "4 failed" or "6 passed"
-        const summaryMatch = line.match(/(\d+)\s+(passed|failed)/);
-        if (summaryMatch) {
-            const count = parseInt(summaryMatch[1]);
-            const status = summaryMatch[2];
+        // Match final summary: "5 failed" or "3 passed, 2 failed"
+        const finalMatch = line.match(/^\s*(\d+)\s+(failed|passed)$/);
+        if (finalMatch) {
+            const count = parseInt(finalMatch[1]);
+            const status = finalMatch[2];
             
-            if (status === 'passed' && testProgress.passed !== count) {
-                testProgress.passed = count;
-                shouldBroadcast = true;
-            } else if (status === 'failed' && testProgress.failed !== count) {
+            if (status === 'failed' && testProgress.failed !== count) {
                 testProgress.failed = count;
+                testProgress.completed = count; // All tests completed if we see final summary
+                shouldBroadcast = true;
+            } else if (status === 'passed' && testProgress.passed !== count) {
+                testProgress.passed = count;
+                testProgress.completed = count; // All tests completed if we see final summary
                 shouldBroadcast = true;
             }
-            
-            testProgress.completed = testProgress.passed + testProgress.failed;
         }
         
-        // Extract total test count when available
-        const totalMatch = line.match(/Running\s+(\d+)\s+tests?/);
-        if (totalMatch) {
-            const newTotal = parseInt(totalMatch[1]);
-            if (testProgress.total !== newTotal) {
-                testProgress.total = newTotal;
+        // Match mixed summary: "2 passed, 3 failed"
+        const mixedMatch = line.match(/(\d+)\s+passed,\s*(\d+)\s+failed/);
+        if (mixedMatch) {
+            const passed = parseInt(mixedMatch[1]);
+            const failed = parseInt(mixedMatch[2]);
+            
+            if (testProgress.passed !== passed || testProgress.failed !== failed) {
+                testProgress.passed = passed;
+                testProgress.failed = failed;
+                testProgress.completed = passed + failed;
                 shouldBroadcast = true;
             }
         }
@@ -367,6 +399,10 @@ app.post('/reset-test-status', (req, res) => {
         currentFile: '',
         stage: 'idle'
     };
+    
+    // Reset logged state
+    lastLoggedState = { currentTest: '', completed: -1, passed: -1, failed: -1 };
+    
     broadcastProgress();
     
     if (currentTestProcess) {
@@ -416,6 +452,10 @@ app.get('/run-tests', async (req, res) => {
             currentFile: '',
             stage: 'running'
         };
+        
+        // Reset logged state for new test run
+        lastLoggedState = { currentTest: '', completed: -1, passed: -1, failed: -1 };
+        
         console.log('🚀 Starting Playwright tests...');
         broadcastProgress();
         
