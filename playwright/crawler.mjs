@@ -42,13 +42,16 @@ async function crawlAndCollectUrls(urlToCrawl) {
 
         console.log(`Links found on ${urlToCrawl}:`, links); // Debugging log for collected links
 
+        // Extract the base domain without subdomain for filtering
+        const baseDomainForFilter = fullDomain.replace(/^www\./, ''); // Remove www. if present
+        
         // Normalize, filter, and deduplicate links
         const filteredLinks = Array.from(new Set(links.filter(link => {
             try {
                 const parsedLink = new URL(link);
                 // Ensure it's an internal link and not already visited
                 return (
-                    (parsedLink.hostname.endsWith(domain) || parsedLink.hostname === 'www.' + domain) && // Allow www
+                    (parsedLink.hostname.endsWith(baseDomainForFilter) || parsedLink.hostname === 'www.' + baseDomainForFilter) && // Allow www
                     !visited.has(parsedLink.href) && // Check if the link has already been visited
                     !parsedLink.hash // Exclude links with a fragment (e.g., #)
                 );
