@@ -1,6 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import promptSync from 'prompt-sync';
+import playwrightConfig from './playwright.config.js';
 
 // Create a prompt instance
 const prompt = promptSync();
@@ -28,7 +29,9 @@ async function navigateWithRetry(page, url, retries = 3, delay = 1000) {
 
 async function crawlAndCollectUrls(urlToCrawl) {
     const browser = await chromium.launch();
-    const context = await browser.newContext();
+    const context = await browser.newContext({
+        extraHTTPHeaders: playwrightConfig.use.extraHTTPHeaders
+    });
     const page = await context.newPage();
 
     try {
