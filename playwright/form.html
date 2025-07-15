@@ -97,44 +97,17 @@
         
         <form action="/run-crawler" method="POST">
             <div class="section">
-                <h3>Crawler Configuration</h3>
+                <h3>Configuration</h3>
                 <div class="form-group">
-                    <label for="env">ENV:</label>
-                    <input type="text" id="env" name="ENV" value="" required>
-                    <div class="help-text">Environment (e.g., dev, test, www)</div>
+                    <label for="source_url">Source URL:</label>
+                    <input type="text" id="source_url" name="SOURCE_URL" value="" required>
+                    <div class="help-text">Source domain for crawling URLs and comparison (e.g., www.thevisiongroup.com)</div>
                 </div>
                 
                 <div class="form-group">
-                    <label for="domain">DOMAIN:</label>
-                    <input type="text" id="domain" name="DOMAIN" value="" required>
-                    <div class="help-text">Domain (e.g., tlcvision.ca)</div>
-                </div>
-            </div>
-            
-            <div class="section">
-                <h3>Test Configuration</h3>
-                <div class="form-group">
-                    <label for="env1">ENV1:</label>
-                    <input type="text" id="env1" name="ENV1" value="" required>
-                    <div class="help-text">First environment for comparison</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="env2">ENV2:</label>
-                    <input type="text" id="env2" name="ENV2" value="" required>
-                    <div class="help-text">Second environment for comparison</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="domain1">DOMAIN1:</label>
-                    <input type="text" id="domain1" name="DOMAIN1" value="" required>
-                    <div class="help-text">First domain for comparison</div>
-                </div>
-                
-                <div class="form-group">
-                    <label for="domain2">DOMAIN2:</label>
-                    <input type="text" id="domain2" name="DOMAIN2" value="" required>
-                    <div class="help-text">Second domain for comparison</div>
+                    <label for="target_url">Target URL:</label>
+                    <input type="text" id="target_url" name="TARGET_URL" value="" required>
+                    <div class="help-text">Target domain for comparison testing (e.g., test.thevisiongroup.com)</div>
                 </div>
             </div>
             

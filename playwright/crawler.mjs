@@ -5,12 +5,11 @@ import promptSync from 'prompt-sync';
 // Create a prompt instance
 const prompt = promptSync();
 
-// Get the base domain from the environment variable or prompt the user for it
-const domain = process.env.DOMAIN || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const env = process.env.ENV || prompt('Enter the environment (e.g., dev, test, www): ');
+// Get the full domain from the environment variable or prompt the user for it
+const fullDomain = process.env.DOMAIN || prompt('Enter the full domain (e.g., www.thevisiongroup.com): ');
 
-// Construct the base domain using the environment and domain
-const baseDomain = `https://${env}.${domain}`;
+// Construct the base domain using the full domain
+const baseDomain = `https://${fullDomain}`;
 const visited = new Set(); // To keep track of visited URLs
 let urlsToVisit = []; // Store URLs to visit
 

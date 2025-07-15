@@ -7,10 +7,8 @@ import promptSync from 'prompt-sync';
 const prompt = promptSync();
 
 // Get the domain from the environment variable or prompt the user for it
-const domain1 = process.env.DOMAIN1 || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const domain2 = process.env.DOMAIN2 || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const env1 = process.env.ENV1 || prompt('Enter the first env (e.g., www, test, dev): ');
-const env2 = process.env.ENV2 || prompt('Enter the second env (e.g., www, test, dev): ');
+const sourceUrl = process.env.SOURCE_URL || prompt('Enter the source URL (e.g., www.thevisiongroup.com): ');
+const targetUrl = process.env.TARGET_URL || prompt('Enter the target URL (e.g., test.thevisiongroup.com): ');
 
 // Load URLs from urls.json
 let urlsData;
@@ -66,27 +64,27 @@ urlsData.forEach((url) => {
       console.log(`Starting comparison for: ${url}`);
 
       // Prepare full URLs
-      const url1 = `https://${env1}.${domain1}${url}`; // First URL 
-      const url2 = `https://${env2}.${domain2}${url}`; // Second URL 
+              const sourceFullUrl = `https://${sourceUrl}${url}`; // Source URL
+        const targetFullUrl = `https://${targetUrl}${url}`; // Target URL 
 
       // Navigate to the first URL and get the title and meta tags
-      await page.goto(url1, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      const env1Title = await page.title();
-      const env1MetaDescription = await page.$eval(
-        'meta[name="description"]',
-        (meta) => meta?.content || null
-      ).catch(() => null); // Handle missing meta tag
+              await page.goto(sourceFullUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+              const sourceTitle = await page.title();
+        const sourceMetaDescription = await page.$eval(
+            'meta[name="description"]',
+            (meta) => meta?.content || null
+        ).catch(() => null); // Handle missing meta tag
 
-      // Navigate to the second URL and get the title and meta tags
-      await page.goto(url2, { waitUntil: 'domcontentloaded', timeout: 60000 });
-      const env2Title = await page.title();
-      const env2MetaDescription = await page.$eval(
-        'meta[name="description"]',
-        (meta) => meta?.content || null
+        // Navigate to the second URL and get the title and meta tags
+        await page.goto(targetFullUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+        const targetTitle = await page.title();
+        const targetMetaDescription = await page.$eval(
+            'meta[name="description"]',
+            (meta) => meta?.content || null
       ).catch(() => null); // Handle missing meta tag
 
       // Check for missing meta or title
-      if (!env1Title || !env2Title || !env1MetaDescription || !env2MetaDescription) {
+              if (!sourceTitle || !targetTitle || !sourceMetaDescription || !targetMetaDescription) {
         console.warn(`Missing meta or title for ${testLabel}.`);
         console.log(`Title & Meta Tag Tests for ${testLabel} ended - PASSED (missing meta)`);
         addNoMetaUrl(url); // Add to nometa.json
@@ -95,8 +93,8 @@ urlsData.forEach((url) => {
 
       // Validate title and meta tags
       try {
-        expect(env2Title).toBe(env1Title);
-        expect(env2MetaDescription).toBe(env1MetaDescription);
+        expect(targetTitle).toBe(sourceTitle);
+        expect(targetMetaDescription).toBe(sourceMetaDescription);
       } catch (assertionError) {
         console.log(`Title & Meta Tag Tests for ${testLabel} ended - FAILED`);
         throw assertionError;

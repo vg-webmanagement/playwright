@@ -64,12 +64,8 @@ app.post('/run-crawler', async (req, res) => {
     try {
         // Store form data and sanitize inputs
         formData = {
-            ENV: sanitizeInput(req.body.ENV),
-            DOMAIN: sanitizeInput(req.body.DOMAIN),
-            ENV1: sanitizeInput(req.body.ENV1),
-            ENV2: sanitizeInput(req.body.ENV2),
-            DOMAIN1: sanitizeInput(req.body.DOMAIN1),
-            DOMAIN2: sanitizeInput(req.body.DOMAIN2),
+            SOURCE_URL: sanitizeInput(req.body.SOURCE_URL),
+            TARGET_URL: sanitizeInput(req.body.TARGET_URL),
             selectedTests: Array.isArray(req.body.selectedTests) ? req.body.selectedTests : [req.body.selectedTests]
         };
         
@@ -84,7 +80,7 @@ app.post('/run-crawler', async (req, res) => {
 
         // Run the crawler with environment variables
         console.log('🕷️ Starting crawler...');
-        const crawlerCommand = `ENV=${formData.ENV} DOMAIN=${formData.DOMAIN} node crawler.mjs`;
+        const crawlerCommand = `DOMAIN=${formData.SOURCE_URL} node crawler.mjs`;
         
         const { stdout, stderr } = await execAsync(crawlerCommand, { cwd: __dirname });
         console.log('✅ Crawler completed successfully');
@@ -464,10 +460,10 @@ app.post('/cleanup-reports', (req, res) => {
 // Route 6: Run Playwright tests
 app.get('/run-tests', async (req, res) => {
     try {
-        if (!formData.ENV1 || !formData.ENV2 || !formData.DOMAIN1 || !formData.DOMAIN2) {
+        if (!formData.SOURCE_URL || !formData.TARGET_URL) {
             return res.status(400).send(`
                 <h1>Error: Missing Test Configuration</h1>
-                <p>Please go back and fill out all required fields.</p>
+                <p>Please go back and fill out Source URL and Target URL fields.</p>
                 <a href="/">Back to Form</a>
             `);
         }
@@ -557,7 +553,7 @@ app.get('/run-tests', async (req, res) => {
         
         // Build the command with environment variables and selected test files
         const testFiles = formData.selectedTests.map(test => `tests/${test}`).join(' ');
-        const testCommand = `ENV1=${formData.ENV1} ENV2=${formData.ENV2} DOMAIN1=${formData.DOMAIN1} DOMAIN2=${formData.DOMAIN2} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8`;
+        const testCommand = `SOURCE_URL=${formData.SOURCE_URL} TARGET_URL=${formData.TARGET_URL} npx playwright test ${testFiles} --project=chromium --reporter=html --workers=8`;
         
 
         

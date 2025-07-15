@@ -32,6 +32,11 @@ module.exports = defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Custom headers for IP-restricted access */
+    extraHTTPHeaders: {
+      'X-CS-TOKEN': '!!C0D3Sp@c3!!'
+    },
   },
 
   /* Configure projects for major browsers */

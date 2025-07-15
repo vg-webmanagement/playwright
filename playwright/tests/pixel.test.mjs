@@ -5,12 +5,10 @@ import { PNG } from 'pngjs';
 import path from 'path';
 import promptSync from 'prompt-sync';
 
-// Prompt user for input if DOMAIN, ENV1, or ENV2 is not set
+// Prompt user for input if SOURCE_URL is not set
 const prompt = promptSync();
-const domain1 = process.env.DOMAIN1 || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const domain2 = process.env.DOMAIN2 || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const env1 = process.env.ENV1 || prompt('Enter the first env (e.g., www, test, dev): ');
-const env2 = process.env.ENV2 || prompt('Enter the second env (e.g., www, test, dev): ');
+const sourceUrl = process.env.SOURCE_URL || prompt('Enter the source URL (e.g., www.thevisiongroup.com): ');
+const targetUrl = process.env.TARGET_URL || prompt('Enter the target URL (e.g., test.thevisiongroup.com): ');
 
 // Create a folder for screenshots if it doesn't exist
 const screenshotsFolder = path.join(process.cwd(), 'screenshots');
@@ -83,11 +81,11 @@ urlsData.forEach((url) => {
         try {
             console.log(`Starting comparison for: ${url}`);
 
-            const url1 = `https://${env1}.${domain1}${url}`;
-            const url2 = `https://${env2}.${domain2}${url}`;
+                    const sourceFullUrl = `https://${sourceUrl}${url}`;
+        const targetFullUrl = `https://${targetUrl}${url}`;
 
             // Navigate to the first URL with retry logic
-            await navigateWithRetry(page, url1);
+            await navigateWithRetry(page, sourceFullUrl);
 
             const width = await page.evaluate(() => document.body.scrollWidth);
             const height = await page.evaluate(() => document.body.scrollHeight);
@@ -105,7 +103,7 @@ urlsData.forEach((url) => {
             const page2 = await context2.newPage();
 
             // Navigate to the second URL with retry logic
-            await navigateWithRetry(page2, url2);
+            await navigateWithRetry(page2, targetFullUrl);
 
             await page2.setViewportSize({ width: width, height: height });
 

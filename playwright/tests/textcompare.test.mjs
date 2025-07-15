@@ -9,12 +9,10 @@ const ANSI_RED = '\x1b[31m'; // Read for removed
 const ANSI_GREEN = '\x1b[32m'; // Green for added
 const ANSI_RESET = '\x1b[0m'; // Reset color
 
-// Prompt user for input if DOMAIN is not set
+// Prompt user for input if SOURCE_URL is not set
 const prompt = promptSync();
-const domain1 = process.env.DOMAIN1 || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const domain2 = process.env.DOMAIN2 || prompt('Enter the domain (e.g., tlcvision.ca): ');
-const env1 = process.env.ENV1 || prompt('Enter the first env (e.g., www, test, dev): ');
-const env2 = process.env.ENV2 || prompt('Enter the second env (e.g., www, test, dev): ');
+const sourceUrl = process.env.SOURCE_URL || prompt('Enter the source URL (e.g., www.thevisiongroup.com): ');
+const targetUrl = process.env.TARGET_URL || prompt('Enter the target URL (e.g., test.thevisiongroup.com): ');
 
 // Load URLs from urls.json
 const urlsFilePath = path.join(process.cwd(), 'tests', 'urls.json');
@@ -119,25 +117,25 @@ urlsData.forEach((url) => {
   const testLabel = url.replace(/[\/#?&]/g, '-'); // Create a readable label from the URL
 
   test(`Rendered Text Comparison for ${testLabel}`, async ({ page }) => {
-    const env1Url = `https://${env1}.${domain1}${url}`;
-    const env2Url = `https://${env2}.${domain2}${url}`;
+            const sourceFullUrl = `https://${sourceUrl}${url}`;
+        const targetFullUrl = `https://${targetUrl}${url}`;
 
     try {
-      await test.step(`Navigate to environment 1 URL: ${env1Url}`, async () => {
-        await navigateWithRetry(page, env1Url); // Use retry logic for environment 1
+      await test.step(`Navigate to source URL: ${sourceFullUrl}`, async () => {
+        await navigateWithRetry(page, sourceFullUrl); // Use retry logic for source
       });
 
-      const env1Text = normalizeText(await page.textContent('body'));
+      const sourceText = normalizeText(await page.textContent('body'));
 
-      await test.step(`Navigate to environment 2 URL: ${env2Url}`, async () => {
-        await navigateWithRetry(page, env2Url); // Use retry logic for environment 2
+      await test.step(`Navigate to target URL: ${targetFullUrl}`, async () => {
+        await navigateWithRetry(page, targetFullUrl); // Use retry logic for target
       });
 
-      const env2Text = normalizeText(await page.textContent('body'));
+      const targetText = normalizeText(await page.textContent('body'));
 
-      await test.step('Compare text content between the two environments', () => {
-        if (env1Text !== env2Text) {
-          const differences = generateDiffReport(env1Text, env2Text);
+      await test.step('Compare text content between source and target', () => {
+        if (sourceText !== targetText) {
+          const differences = generateDiffReport(sourceText, targetText);
 
           // Log the differences directly to the test output
           console.log(`### Differences found for ${testLabel}:\n${differences}\n`);
@@ -155,8 +153,8 @@ urlsData.forEach((url) => {
       addPassedUrl(url);
     } catch (error) {
       console.error(`Error during text comparison for ${testLabel}:`, error);
-      console.error(`Environment 1 URL: ${env1Url}`);
-      console.error(`Environment 2 URL: ${env2Url}`);
+              console.error(`Source URL: ${sourceFullUrl}`);
+        console.error(`Target URL: ${targetFullUrl}`);
       console.log(`Text Content Comparison for ${testLabel} ended - ERROR`);
       throw error; // Ensure the test fails if an error occurs
     }
