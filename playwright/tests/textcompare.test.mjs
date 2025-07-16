@@ -122,12 +122,11 @@ async function navigateWithRetry(page, url, retries = 2) {
     }
 }
 
-// Parallel test execution with progress bar compatibility
-test.describe.parallel('Text Comparison Suite', () => {
-    urlsData.forEach((url) => {
-        const testLabel = url.replace(/[\/#?&]/g, '-');
+// Optimized test execution with progress bar compatibility
+urlsData.forEach((url) => {
+    const testLabel = url.replace(/[\/#?&]/g, '-');
 
-        test(`Rendered Text Comparison for ${testLabel}`, async ({ browser }) => {
+    test(`Rendered Text Comparison for ${testLabel}`, async ({ browser }) => {
             const context = await browser.newContext();
             const page = await context.newPage();
 
@@ -180,7 +179,6 @@ test.describe.parallel('Text Comparison Suite', () => {
             }
         });
     });
-});
 
 // After all tests, log the final passed URLs
 test.afterAll(async () => {
