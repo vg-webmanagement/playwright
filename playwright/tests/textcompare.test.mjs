@@ -133,7 +133,6 @@ urlsData.forEach((url) => {
             try {
                 // Progress bar compatible start message
                 console.log(`Starting comparison for: ${url}`);
-                console.log(`Text Content Comparison for ${testLabel}`);
 
                 const sourceFullUrl = `https://${sourceUrl}${url}`;
                 const targetFullUrl = `https://${targetUrl}${url}`;
