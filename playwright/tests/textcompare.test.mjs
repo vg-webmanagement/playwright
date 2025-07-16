@@ -5,7 +5,7 @@ import promptSync from 'prompt-sync';
 import * as Diff from 'diff';
 
 // ANSI color codes
-const ANSI_RED = '\x1b[31m'; // Read for removed
+const ANSI_RED = '\x1b[31m'; // Red for removed
 const ANSI_GREEN = '\x1b[32m'; // Green for added
 const ANSI_RESET = '\x1b[0m'; // Reset color
 
@@ -68,101 +68,122 @@ function normalizeText(text) {
 
 // Function to generate a summary of significant differences, excluding non-content parts
 function generateDiffReport(text1, text2) {
-  const diffResults = Diff.diffWords(text1, text2);
-  const significantChanges = diffResults.filter(part => part.added || part.removed);
+    const diffResults = Diff.diffWords(text1, text2);
+    const significantChanges = diffResults.filter(part => part.added || part.removed);
 
-  return significantChanges
-    .map(part => {
-      // Wrap the whole line in the corresponding color codes
-      const color = part.added ? ANSI_GREEN : part.removed ? ANSI_RED : '';
-      const prefix = part.added ? '[ADDED]' : part.removed ? '[REMOVED]' : '';
-      return `${color}${prefix} ${part.value.trim()}${ANSI_RESET}`; // Color the entire line
-    })
-    .join('\n');
+    return significantChanges
+        .map(part => {
+            // Wrap the whole line in the corresponding color codes
+            const color = part.added ? ANSI_GREEN : part.removed ? ANSI_RED : '';
+            const prefix = part.added ? '[ADDED]' : part.removed ? '[REMOVED]' : '';
+            return `${color}${prefix} ${part.value.trim()}${ANSI_RESET}`; // Color the entire line
+        })
+        .join('\n');
 }
 
-// Function to navigate with retry logic
-async function navigateWithRetry(page, url, retries = 5) {
-  for (let attempt = 0; attempt <= retries; attempt++) {
-    try {
-      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
-      await page.waitForTimeout(2000); // Wait for 2 seconds
+// Function to navigate with retry logic - improved version
+async function navigateWithRetry(page, url, retries = 2) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const response = await page.goto(url, { timeout: 20000 });
+            await page.waitForLoadState('networkidle');
+            await page.waitForTimeout(2000); // Reduced wait time for better performance
 
-      // Check if the page contains specific error messages
-      const pageContent = await page.textContent('body');
-      if (pageContent.includes('502 Bad Gateway') || pageContent.includes('Timeout')) {
-        if (attempt < retries) {
-          console.warn(`Retrying navigation to ${url} due to error text in page content (Attempt ${attempt + 1})`);
-          continue; // Retry if error text is found
-        } else {
-          throw new Error(`Page contains error text: ${pageContent.trim().slice(0, 100)}...`); // Throw error if retries are exhausted
+            // Check response status
+            if (!response || response.status() >= 400) {
+                const statusCode = response?.status() || 'No response';
+                if (attempt < retries - 1) {
+                    console.warn(`Retrying navigation to ${url} due to HTTP ${statusCode} (Attempt ${attempt + 1})`);
+                    continue;
+                } else {
+                    throw new Error(`Failed to load ${url}, HTTP ${statusCode}`);
+                }
+            }
+
+            // Check if the page contains specific error messages
+            const pageContent = await page.textContent('body');
+            if (pageContent.includes('502 Bad Gateway') || pageContent.includes('Timeout')) {
+                if (attempt < retries - 1) {
+                    console.warn(`Retrying navigation to ${url} due to error text in page content (Attempt ${attempt + 1})`);
+                    continue;
+                } else {
+                    throw new Error(`Page contains error text: ${pageContent.trim().slice(0, 100)}...`);
+                }
+            }
+
+            return; // Exit the loop if successful
+        } catch (error) {
+            if (attempt < retries - 1) {
+                console.warn(`Retrying navigation to ${url} due to: ${error.message} (Attempt ${attempt + 1})`);
+            } else {
+                throw error;
+            }
         }
-      }
-
-      return; // Exit the loop if successful and no error text is found
-    } catch (error) {
-      if (attempt < retries && (error.message.includes('Timeout') || error.message.includes('Navigation timeout'))) {
-        console.warn(`Retrying navigation to ${url} due to timeout (Attempt ${attempt + 1})`);
-      } else if (attempt < retries) {
-        console.warn(`Retrying navigation to ${url} due to ${error.message} (Attempt ${attempt + 1})`);
-      } else {
-        throw error; // Rethrow the error if retries are exhausted
-      }
     }
-  }
 }
 
-// Define the tests for each URL
-urlsData.forEach((url) => {
-  const testLabel = url.replace(/[\/#?&]/g, '-'); // Create a readable label from the URL
+// Parallel test execution with progress bar compatibility
+test.describe.parallel('Text Comparison Suite', () => {
+    urlsData.forEach((url) => {
+        const testLabel = url.replace(/[\/#?&]/g, '-');
 
-  test(`Rendered Text Comparison for ${testLabel}`, async ({ page }) => {
-            const sourceFullUrl = `https://${sourceUrl}${url}`;
-        const targetFullUrl = `https://${targetUrl}${url}`;
+        test(`Rendered Text Comparison for ${testLabel}`, async ({ browser }) => {
+            const context = await browser.newContext();
+            const page = await context.newPage();
 
-    try {
-      await test.step(`Navigate to source URL: ${sourceFullUrl}`, async () => {
-        await navigateWithRetry(page, sourceFullUrl); // Use retry logic for source
-      });
+            try {
+                // Progress bar compatible start message
+                console.log(`Starting comparison for: ${url}`);
+                console.log(`Text Content Comparison for ${testLabel}`);
 
-      const sourceText = normalizeText(await page.textContent('body'));
+                const sourceFullUrl = `https://${sourceUrl}${url}`;
+                const targetFullUrl = `https://${targetUrl}${url}`;
 
-      await test.step(`Navigate to target URL: ${targetFullUrl}`, async () => {
-        await navigateWithRetry(page, targetFullUrl); // Use retry logic for target
-      });
+                await test.step(`Navigate to source URL: ${sourceFullUrl}`, async () => {
+                    await navigateWithRetry(page, sourceFullUrl);
+                });
 
-      const targetText = normalizeText(await page.textContent('body'));
+                const sourceText = normalizeText(await page.textContent('body'));
 
-      await test.step('Compare text content between source and target', () => {
-        if (sourceText !== targetText) {
-          const differences = generateDiffReport(sourceText, targetText);
+                await test.step(`Navigate to target URL: ${targetFullUrl}`, async () => {
+                    await navigateWithRetry(page, targetFullUrl);
+                });
 
-          // Log the differences directly to the test output
-          console.log(`### Differences found for ${testLabel}:\n${differences}\n`);
-          console.log(`Text Content Comparison for ${testLabel} ended - FAILED`);
+                const targetText = normalizeText(await page.textContent('body'));
 
-          // Improved error message including specific details of differences
-          throw new Error(`Text differences found for ${testLabel}.\nDetails:\n${differences}`);
-        }
-      });
+                await test.step('Compare text content between source and target', () => {
+                    if (sourceText !== targetText) {
+                        const differences = generateDiffReport(sourceText, targetText);
 
-      console.log(`Text comparison passed for ${testLabel}. No differences found.`);
-      console.log(`Text Content Comparison for ${testLabel} ended - PASSED`);
+                        // Log the differences directly to the test output
+                        console.log(`### Differences found for ${testLabel}:\n${differences}\n`);
+                        console.log(`Text Content Comparison for ${testLabel} ended - FAILED`);
 
-      // Add the passed URL to the shared file
-      addPassedUrl(url);
-    } catch (error) {
-      console.error(`Error during text comparison for ${testLabel}:`, error);
-              console.error(`Source URL: ${sourceFullUrl}`);
-        console.error(`Target URL: ${targetFullUrl}`);
-      console.log(`Text Content Comparison for ${testLabel} ended - ERROR`);
-      throw error; // Ensure the test fails if an error occurs
-    }
-  });
+                        // Improved error message including specific details of differences
+                        throw new Error(`Text differences found for ${testLabel}.\nDetails:\n${differences}`);
+                    }
+                });
+
+                console.log(`Text comparison passed for ${testLabel}. No differences found.`);
+                console.log(`Text Content Comparison for ${testLabel} ended - PASSED`);
+
+                // Add the passed URL to the shared file
+                addPassedUrl(url);
+            } catch (error) {
+                console.error(`Error during text comparison for ${testLabel}:`, error);
+                console.error(`Source URL: ${sourceFullUrl}`);
+                console.error(`Target URL: ${targetFullUrl}`);
+                console.log(`Text Content Comparison for ${testLabel} ended - ERROR`);
+                throw error; // Ensure the test fails if an error occurs
+            } finally {
+                await context.close();
+            }
+        });
+    });
 });
 
 // After all tests, log the final passed URLs
 test.afterAll(async () => {
-  const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
-  console.log('Final Passed URLs:', passedUrls); // Print all passed URLs at the end
+    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
+    console.log('Final Passed URLs:', passedUrls);
 });
