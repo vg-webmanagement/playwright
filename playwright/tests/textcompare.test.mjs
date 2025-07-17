@@ -63,10 +63,15 @@ function normalizeText(text) {
         .replace(/,\s*]/g, ']') // Remove trailing commas before closing brackets
         .replace(/],\s*}/g, ']}') // Remove trailing commas before closing braces
         .replace(/\s*}\s*$/, '}') // Trim whitespace before closing braces
-        // Remove JSON structural elements that cause noise in diffs
-        .replace(/\s*\]\s*}\s*/g, ' ') // Remove ]} patterns
-        .replace(/\s*}\s*\]\s*/g, ' ') // Remove }] patterns
+        // Remove JSON structural elements that cause noise in diffs - be more aggressive
+        .replace(/\]\s*}/g, '') // Remove ]} patterns completely
+        .replace(/}\s*\]/g, '') // Remove }] patterns completely
+        .replace(/^\s*\]}\s*$/gm, '') // Remove lines that are just ]}
+        .replace(/^\s*}\]\s*$/gm, '') // Remove lines that are just }]
+        .replace(/^\s*[\[\]{}]+\s*$/gm, '') // Remove lines that are just structural characters
         .replace(/\s*[\[\]{}]+\s*/g, ' ') // Remove standalone structural characters
+        .replace(/\s*[\[\]{}]\s*/g, ' ') // Remove single structural characters
+        .replace(/[\[\]{}]+/g, ' ') // Remove consecutive structural characters
         .replace(/\s{2,}/g, ' ') // Normalize multiple spaces back to single spaces
         .trim();
 }
