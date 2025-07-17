@@ -155,7 +155,7 @@ urlsData.forEach((url) => {
 
                         // Log the differences directly to the test output
                         console.log(`### Differences found for ${testLabel}:\n${differences}\n`);
-                        console.log(`Text Content Comparison for ${testLabel} ended - FAILED`);
+                        console.log(`Rendered Text Comparison for ${testLabel} ended - FAILED`);
 
                         // Improved error message including specific details of differences
                         throw new Error(`Text differences found for ${testLabel}.\nDetails:\n${differences}`);
@@ -163,7 +163,7 @@ urlsData.forEach((url) => {
                 });
 
                 console.log(`Text comparison passed for ${testLabel}. No differences found.`);
-                console.log(`Text Content Comparison for ${testLabel} ended - PASSED`);
+                console.log(`Rendered Text Comparison for ${testLabel} ended - PASSED`);
 
                 // Add the passed URL to the shared file
                 addPassedUrl(url);
@@ -171,7 +171,7 @@ urlsData.forEach((url) => {
                 console.error(`Error during text comparison for ${testLabel}:`, error);
                 console.error(`Source URL: ${sourceFullUrl}`);
                 console.error(`Target URL: ${targetFullUrl}`);
-                console.log(`Text Content Comparison for ${testLabel} ended - ERROR`);
+                console.log(`Rendered Text Comparison for ${testLabel} ended - ERROR`);
                 throw error; // Ensure the test fails if an error occurs
             } finally {
                 await context.close();
