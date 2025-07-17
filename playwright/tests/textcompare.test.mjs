@@ -87,7 +87,7 @@ async function navigateWithRetry(page, url, retries = 2) {
         try {
             const response = await page.goto(url, { timeout: 20000 });
             await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(2000); // Reduced wait time for better performance
+            await page.waitForTimeout(3000); // Reduced from 10000ms for better performance
 
             // Check response status
             if (!response || response.status() >= 400) {
