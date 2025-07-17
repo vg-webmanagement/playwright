@@ -60,6 +60,11 @@ function normalizeText(text) {
         .replace(/fbq\(".*?"\);/g, '') // Remove Facebook Pixel tracking calls
         .replace(/ttq\.track\(".*?"\);/g, '') // Remove TikTok Pixel tracking calls
         .replace(/_tvq\.push\(\[.*?\]\);/g, '') // Remove TVSquared tracking calls
+        .replace(/var\s+_tvq=window\._tvq=window\._tvq\|\|[\s\S]*?tvsquared\.com[\s\S]*?;/g, '') // Remove TVSquared initialization
+        .replace(/_tvq=window\._tvq=window\._tvq\|\|[\s\S]*?tvsquared\.com[\s\S]*?;/g, '') // Remove TVSquared initialization (without var)
+        .replace(/\(function\(a,b\)[\s\S]*?spdt\("view"\)[\s\S]*?\)\(window,document\);/g, '') // Remove Spotify pixel tracking
+        .replace(/var\s+_tvq=[\s\S]*?collector-\d+\.us\.tvsquared\.com[\s\S]*?;/g, '') // Remove TVSquared collector scripts
+        .replace(/_tvq=[\s\S]*?collector-\d+\.us\.tvsquared\.com[\s\S]*?;/g, '') // Remove TVSquared collector scripts (without var)
         .replace(/,\s*]/g, ']') // Remove trailing commas before closing brackets
         .replace(/],\s*}/g, ']}') // Remove trailing commas before closing braces
         .replace(/\s*}\s*$/, '}') // Trim whitespace before closing braces
