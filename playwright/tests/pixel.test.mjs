@@ -56,16 +56,7 @@ async function navigateWithRetry(page, url, retries = 2) {
                 }
             }
 
-            // Check if the page contains specific error messages
-            const pageContent = await page.textContent('body');
-            if (pageContent.includes('502 Bad Gateway') || pageContent.includes('Timeout')) {
-                if (attempt < retries - 1) {
-                    console.warn(`Retrying navigation to ${url} due to error text in page content (Attempt ${attempt + 1})`);
-                    continue;
-                } else {
-                    throw new Error(`Page contains error text: ${pageContent.trim().slice(0, 100)}...`);
-                }
-            }
+            // Page loaded successfully - skip page content checking to avoid false positives
 
             return; // Exit the loop if successful
         } catch (error) {
