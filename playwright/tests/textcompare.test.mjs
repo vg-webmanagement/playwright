@@ -121,12 +121,13 @@ urlsData.forEach((url) => {
             const context = await browser.newContext();
             const page = await context.newPage();
 
-            try {
-                // Progress bar compatible start message
-                console.log(`Starting comparison for: ${url}`);
+                    // Define URLs outside try block for error handling
+        const sourceFullUrl = `https://${sourceUrl}${url}`;
+        const targetFullUrl = `https://${targetUrl}${url}`;
 
-                const sourceFullUrl = `https://${sourceUrl}${url}`;
-                const targetFullUrl = `https://${targetUrl}${url}`;
+        try {
+            // Progress bar compatible start message
+            console.log(`Starting comparison for: ${url}`);
 
                 await test.step(`Navigate to source URL: ${sourceFullUrl}`, async () => {
                     await navigateWithRetry(page, sourceFullUrl);
