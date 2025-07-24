@@ -87,10 +87,9 @@ async function navigateWithRetry(page, url, retries = 2) {
  */
 async function createContextWithHeaders(browser, sourceUrl, targetUrl) {
     const context = await browser.newContext();
-    const page = await context.newPage();
     
-    // Set up route interception to add X-CS-TOKEN only for source/target domains
-    await page.route('**/*', async (route) => {
+    // Set up route interception on the context level to add X-CS-TOKEN only for source/target domains
+    await context.route('**/*', async (route) => {
         const url = route.request().url();
         const isSourceOrTarget = url.includes(sourceUrl) || url.includes(targetUrl);
         
