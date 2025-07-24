@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 import fs from 'fs';
 import promptSync from 'prompt-sync';
-import playwrightConfig from './playwright.config.js';
+import playwrightConfig from './playwright.config.cjs';
 
 // Create a prompt instance
 const prompt = promptSync();
