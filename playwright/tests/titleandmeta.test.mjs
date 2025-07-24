@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import promptSync from 'prompt-sync';
-import { createContextWithHeaders, addPassedUrl, addNoMetaUrl, navigateWithRetry } from './utils.js';
+import { createContextWithHeaders, addPassedUrl, addNoMetaUrl, navigateWithRetry, getPassedUrls } from './utils.mjs';
 
 // Create a prompt instance
 const prompt = promptSync();
@@ -96,6 +96,6 @@ test.describe.parallel('Title and Meta Comparison Suite', () => {
 
 // After all tests, log the final passed URLs
 test.afterAll(async () => {
-    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
+    const passedUrls = getPassedUrls();
     console.log('Final Passed URLs:', passedUrls);
 });

@@ -4,7 +4,7 @@ import path from 'path';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import promptSync from 'prompt-sync';
-import { createContextWithHeaders, addPassedUrl, navigateWithRetry } from './utils.js';
+import { createContextWithHeaders, addPassedUrl, navigateWithRetry, getPassedUrls } from './utils.mjs';
 
 // Prompt user for input if SOURCE_URL is not set
 const prompt = promptSync();
@@ -114,6 +114,6 @@ test.describe.parallel('Pixel Comparison Suite', () => {
 
 // After all tests, log the final passed URLs
 test.afterAll(async () => {
-    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
+    const passedUrls = getPassedUrls();
     console.log('Final Passed URLs:', passedUrls);
 });

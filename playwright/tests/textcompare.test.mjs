@@ -3,7 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import promptSync from 'prompt-sync';
 import * as Diff from 'diff';
-import { createContextWithHeaders, addPassedUrl, navigateWithRetry } from './utils.js';
+import { createContextWithHeaders, addPassedUrl, navigateWithRetry, getPassedUrls } from './utils.mjs';
 
 // ANSI color codes
 const ANSI_RED = '\x1b[31m'; // Red for removed
@@ -148,6 +148,6 @@ urlsData.forEach((url) => {
 
 // After all tests, log the final passed URLs
 test.afterAll(async () => {
-    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
+    const passedUrls = getPassedUrls();
     console.log('Final Passed URLs:', passedUrls);
 });

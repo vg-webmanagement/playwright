@@ -109,9 +109,19 @@ async function createContextWithHeaders(browser, sourceUrl, targetUrl) {
     return context;
 }
 
+/**
+ * Gets the list of passed URLs for logging in afterAll hooks
+ * @returns {string[]} Array of passed URLs
+ */
+function getPassedUrls() {
+    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
+    return passedUrls;
+}
+
 export {
     createContextWithHeaders,
     addPassedUrl,
     addNoMetaUrl,
-    navigateWithRetry
+    navigateWithRetry,
+    getPassedUrls
 }; 
