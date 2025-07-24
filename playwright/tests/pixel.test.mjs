@@ -4,6 +4,7 @@ import path from 'path';
 import pixelmatch from 'pixelmatch';
 import { PNG } from 'pngjs';
 import promptSync from 'prompt-sync';
+import { createContextWithHeaders, addPassedUrl, navigateWithRetry } from './utils.js';
 
 // Prompt user for input if SOURCE_URL is not set
 const prompt = promptSync();
@@ -18,56 +19,11 @@ fs.mkdirSync(screenshotsFolder, { recursive: true });
 const urlsFilePath = path.join(process.cwd(), 'tests', 'urls.json');
 const urlsData = JSON.parse(fs.readFileSync(urlsFilePath, 'utf-8'));
 
-// Use a shared file to collect passed URLs across all workers
-const passedUrlsFilePath = path.join(process.cwd(), 'tests', 'urls-passed.json');
-if (!fs.existsSync(passedUrlsFilePath)) {
-    fs.writeFileSync(passedUrlsFilePath, JSON.stringify([]));
-}
 
-// Add debugging to track when URLs are added
-function addPassedUrl(url) {
-    console.log(`Attempting to add URL to passed list: ${url}`); // Debugging log
-    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
-    if (!passedUrls.includes(url)) {
-        passedUrls.push(url);
-        fs.writeFileSync(passedUrlsFilePath, JSON.stringify(passedUrls, null, 2));
-        console.log(`Successfully added URL to passed list: ${url}`); // Debugging log
-    } else {
-        console.log(`URL already exists in passed list: ${url}`); // Debugging log
-    }
-}
 
-// Function to navigate with retry logic - improved version
-async function navigateWithRetry(page, url, retries = 2) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const response = await page.goto(url, { timeout: 20000 });
-            await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(3000); // Reduced from 10000ms for better performance
 
-            // Check response status
-            if (!response || response.status() >= 400) {
-                const statusCode = response?.status() || 'No response';
-                if (attempt < retries - 1) {
-                    console.warn(`Retrying navigation to ${url} due to HTTP ${statusCode} (Attempt ${attempt + 1})`);
-                    continue;
-                } else {
-                    throw new Error(`Failed to load ${url}, HTTP ${statusCode}`);
-                }
-            }
 
-            // Page loaded successfully - skip page content checking to avoid false positives
 
-            return; // Exit the loop if successful
-        } catch (error) {
-            if (attempt < retries - 1) {
-                console.warn(`Retrying navigation to ${url} due to: ${error.message} (Attempt ${attempt + 1})`);
-            } else {
-                throw error;
-            }
-        }
-    }
-}
 
 // Parallel test execution with progress bar compatibility
 test.describe.parallel('Pixel Comparison Suite', () => {
@@ -75,7 +31,7 @@ test.describe.parallel('Pixel Comparison Suite', () => {
         const testLabel = url.replace(/[\/#?&]/g, '-');
 
         test(`Pixel Comparison for ${testLabel}`, async ({ browser }) => {
-            const context = await browser.newContext();
+            const context = await createContextWithHeaders(browser, sourceUrl, targetUrl);
             
             try {
                 // Progress bar compatible start message

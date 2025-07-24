@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import promptSync from 'prompt-sync';
+import { createContextWithHeaders, addPassedUrl, addNoMetaUrl, navigateWithRetry } from './utils.js';
 
 // Create a prompt instance
 const prompt = promptSync();
@@ -20,68 +21,11 @@ try {
     process.exit(1); // Exit the process with an error code if the file cannot be read
 }
 
-// Use a shared file to collect passed URLs across all workers
-const passedUrlsFilePath = path.join(process.cwd(), 'tests', 'urls-passed.json');
-if (!fs.existsSync(passedUrlsFilePath)) {
-    fs.writeFileSync(passedUrlsFilePath, JSON.stringify([]));
-}
 
-// Function to add passed URLs to the shared file
-function addPassedUrl(url) {
-    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
-    if (!passedUrls.includes(url)) {
-        passedUrls.push(url);
-        fs.writeFileSync(passedUrlsFilePath, JSON.stringify(passedUrls, null, 2));
-    }
-}
 
-// Use a shared file to collect URLs with missing meta or title
-const noMetaFilePath = path.join(process.cwd(), 'tests', 'nometa.json');
-if (!fs.existsSync(noMetaFilePath)) {
-    fs.writeFileSync(noMetaFilePath, JSON.stringify([]));
-}
 
-// Updated logic to add URLs with missing meta or title to `urls-passed.json`
-function addNoMetaUrl(url) {
-    const noMetaUrls = JSON.parse(fs.readFileSync(noMetaFilePath, 'utf-8'));
-    if (!noMetaUrls.includes(url)) {
-        noMetaUrls.push(url);
-        fs.writeFileSync(noMetaFilePath, JSON.stringify(noMetaUrls, null, 2));
-    }
 
-    // Also add to passed URLs
-    addPassedUrl(url);
-}
 
-// Function to navigate with retry logic - improved version
-async function navigateWithRetry(page, url, retries = 2) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const response = await page.goto(url, { timeout: 20000 });
-            await page.waitForLoadState('domcontentloaded');
-            await page.waitForTimeout(1000); // Reduced wait time for better performance
-
-            // Check response status
-            if (!response || response.status() >= 400) {
-                const statusCode = response?.status() || 'No response';
-                if (attempt < retries - 1) {
-                    console.warn(`Retrying navigation to ${url} due to HTTP ${statusCode} (Attempt ${attempt + 1})`);
-                    continue;
-                } else {
-                    throw new Error(`Failed to load ${url}, HTTP ${statusCode}`);
-                }
-            }
-
-            return; // Exit the loop if successful
-        } catch (error) {
-            if (attempt < retries - 1) {
-                console.warn(`Retrying navigation to ${url} due to: ${error.message} (Attempt ${attempt + 1})`);
-            } else {
-                throw error;
-            }
-        }
-    }
-}
 
 // Parallel test execution with progress bar compatibility
 test.describe.parallel('Title and Meta Comparison Suite', () => {
@@ -89,7 +33,7 @@ test.describe.parallel('Title and Meta Comparison Suite', () => {
         const testLabel = url.replace(/[\/#?&]/g, '-');
 
         test(`Meta and Title Comparison for ${testLabel}`, async ({ browser }) => {
-            const context = await browser.newContext();
+            const context = await createContextWithHeaders(browser, sourceUrl, targetUrl);
             const page = await context.newPage();
 
             try {

@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import promptSync from 'prompt-sync';
 import * as Diff from 'diff';
+import { createContextWithHeaders, addPassedUrl, navigateWithRetry } from './utils.js';
 
 // ANSI color codes
 const ANSI_RED = '\x1b[31m'; // Red for removed
@@ -18,20 +19,9 @@ const targetUrl = process.env.TARGET_URL || prompt('Enter the target URL (e.g., 
 const urlsFilePath = path.join(process.cwd(), 'tests', 'urls.json');
 const urlsData = JSON.parse(fs.readFileSync(urlsFilePath, 'utf-8'));
 
-// Use a shared file to collect passed URLs across all workers
-const passedUrlsFilePath = path.join(process.cwd(), 'tests', 'urls-passed.json');
-if (!fs.existsSync(passedUrlsFilePath)) {
-    fs.writeFileSync(passedUrlsFilePath, JSON.stringify([]));
-}
 
-// Function to add passed URLs to the shared file
-function addPassedUrl(url) {
-    const passedUrls = JSON.parse(fs.readFileSync(passedUrlsFilePath, 'utf-8'));
-    if (!passedUrls.includes(url)) {
-        passedUrls.push(url);
-        fs.writeFileSync(passedUrlsFilePath, JSON.stringify(passedUrls, null, 2));
-    }
-}
+
+
 
 // Utility function to normalize visible text for comparison
 function normalizeText(text) {
@@ -96,44 +86,14 @@ function generateDiffReport(text1, text2) {
         .join('\n');
 }
 
-// Function to navigate with retry logic - improved version
-async function navigateWithRetry(page, url, retries = 2) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const response = await page.goto(url, { timeout: 20000 });
-            await page.waitForLoadState('networkidle');
-            await page.waitForTimeout(3000); // Reduced from 10000ms for better performance
 
-            // Check response status
-            if (!response || response.status() >= 400) {
-                const statusCode = response?.status() || 'No response';
-                if (attempt < retries - 1) {
-                    console.warn(`Retrying navigation to ${url} due to HTTP ${statusCode} (Attempt ${attempt + 1})`);
-                    continue;
-                } else {
-                    throw new Error(`Failed to load ${url}, HTTP ${statusCode}`);
-                }
-            }
-
-            // Page loaded successfully - skip page content checking to avoid false positives
-
-            return; // Exit the loop if successful
-        } catch (error) {
-            if (attempt < retries - 1) {
-                console.warn(`Retrying navigation to ${url} due to: ${error.message} (Attempt ${attempt + 1})`);
-            } else {
-                throw error;
-            }
-        }
-    }
-}
 
 // Optimized test execution with progress bar compatibility
 urlsData.forEach((url) => {
     const testLabel = url.replace(/[\/#?&]/g, '-');
 
     test(`Rendered Text Comparison for ${testLabel}`, async ({ browser }) => {
-            const context = await browser.newContext();
+            const context = await createContextWithHeaders(browser, sourceUrl, targetUrl);
             const page = await context.newPage();
 
                     // Define URLs outside try block for error handling
